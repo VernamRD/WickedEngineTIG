@@ -1,0 +1,52 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // Windows
+        {
+            "name": "Windows",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                "${input:renderApiSelect}"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/WickedEngine",
+            "environment": [],
+            "logging": {
+                "programOutput": true,
+                "engineLogging": true
+            }
+        },
+        //Linux
+        {
+            "name": "Linux",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                "${input:renderApiSelect}"
+            ],
+            "stopAtEntry": false,
+            "environment": [],
+        },
+    ],
+    "inputs": [
+        {
+            "id": "renderApiSelect",
+            "type": "pickString",
+            "description": "Select Graphic API:",
+            "options": [
+                {
+                    "label": "Vulkan",
+                    "value": "vulkan"
+                },
+                {
+                    "label": "DirectX 12",
+                    "value": ""
+                }
+            ],
+            "default": "Vulkan"
+        }
+    ],
+}

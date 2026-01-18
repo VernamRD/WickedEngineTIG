@@ -265,9 +265,8 @@ if (PLATFORM MATCHES "SDL2")
     target_compile_definitions(WickedEngine_common PUBLIC SDL2=1)
 endif()
 
-add_library(dxcompiler SHARED IMPORTED)
-set_property(TARGET dxcompiler PROPERTY
-        IMPORTED_LOCATION ${WICKED_ROOT_DIR}/WickedEngine/${LIBDXCOMPILER} )
+add_library(dxcompiler MODULE IMPORTED GLOBAL) 
+set_target_properties(dxcompiler PROPERTIES IMPORTED_LOCATION "${WICKED_ROOT_DIR}/WickedEngine/${LIBDXCOMPILER}" IMPORTED_CONFIGURATIONS "Debug;Release;RelWithDebInfo" )
 
 add_executable(offlineshadercompiler
     offlineshadercompiler.cpp
