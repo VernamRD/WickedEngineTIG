@@ -26,6 +26,7 @@ option(WICKED_DYNAMIC_LIBRARY "Build WickedEngine as a dynamic library" OFF)
 option(WICKED_PIC "Build WickedEngine as position-independent code" WICKED_DYNAMIC_LIBRARY)
 option(USE_LIBCXX "Link WickedEngine to llvm libc++ library - only available with the Clang compiler" OFF)
 option(WICKED_EDITOR "Build WickedEngine editor" ON)
+option(WICKED_GAME "Build game" ON)
 option(WICKED_TESTS "Build WickedEngine tests" ON)
 option(WICKED_IMGUI_EXAMPLE "Build WickedEngine imgui example" ON)
 option(WICKED_ENABLE_IPO "Enable IPO/LTO in non-debug builds" ${ipo_supported})
@@ -188,6 +189,10 @@ add_custom_target(Content
    COMMENT "$<IF:$<BOOL:${WICKED_ENABLE_SYMLINKS}>,Symlinking,Copying> Content directory"
    VERBATIM
 )
+
+if(WICKED_GAME)
+    add_subdirectory(Game)
+endif()
 
 if (WICKED_EDITOR)
     add_subdirectory(Editor)

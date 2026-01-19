@@ -1398,9 +1398,13 @@ namespace wi::helper
 #else
 		return std::filesystem::canonical("/proc/self/exe").string();
 #endif // _WIN32
-	}
+    }
 
-	void FileDialog(const FileDialogParams& params, const std::function<void(std::string fileName)>& onSuccess, const std::function<void()>& onFailure)
+    std::string GetRootDir()
+    {
+        return wi::helper::GetDirectoryFromPath(wi::helper::GetExecutablePath()); }
+
+    void FileDialog(const FileDialogParams& params, const std::function<void(std::string fileName)>& onSuccess, const std::function<void()>& onFailure)
 	{
 #ifdef PLATFORM_WINDOWS_DESKTOP
 		std::thread([=] {

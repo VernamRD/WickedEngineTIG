@@ -141,7 +141,8 @@ namespace wi::helper
 	std::string GetTempDirectoryPath();
 	std::string GetCacheDirectoryPath();
 	std::string GetCurrentPath();
-	std::string GetExecutablePath();
+    std::string GetExecutablePath();
+    std::string GetRootDir();
 
 	struct FileDialogParams
 	{
