@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(Template_Windows)
 
-file(GLOB SOURCE_FILES CONFIGURE_DEPENDS "*.cpp" "*.h")
+file(GLOB SOURCE_FILES "*.cpp" "*.h")
 
 set(LIB_DXCOMPILER "dxcompiler.dll")
 

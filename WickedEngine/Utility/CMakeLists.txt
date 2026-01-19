@@ -5,12 +5,12 @@ if (PLATFORM MATCHES "SDL2")
 	add_subdirectory(FAudio)
 endif()
 
-file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
+file(GLOB_RECURSE HEADER_FILES
 	*.h
 	*.hpp
 	*.inl
 )
-file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
+file(GLOB_RECURSE SOURCE_FILES
 	*.c
 	*.cpp
 )
@@ -32,7 +32,7 @@ install(FILES ${HEADER_FILES}
 # some *.cpp and *.c files are included by other files,
 # so they are not source files that should be
 # compiled on their own; hence we mark them as header files
-file(GLOB_RECURSE DIRECTLY_INCLUDED_FILES CONFIGURE_DEPENDS
+file(GLOB_RECURSE DIRECTLY_INCLUDED_FILES
 	# included by utility_common.cpp
 	mikktspace.c
 	zstd.c
