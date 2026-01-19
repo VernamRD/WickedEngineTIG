@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configure Ninja CC",
+            "type": "cmake",
+            "command": "configure",
+            "preset": "n_cc",
+            "problemMatcher": []
+        },
+        {
+            "label": "Configure Main Preset",
+            "type": "cmake",
+            "command": "configure",
+            "preset": "${command:cmake.activeConfigurePresetName}",
+            "dependsOn": [
+                "Configure Ninja CC"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        }
+    ]
+}

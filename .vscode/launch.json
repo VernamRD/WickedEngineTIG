@@ -12,11 +12,12 @@
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/WickedEngine",
-            "environment": [],
-            "logging": {
-                "programOutput": true,
-                "engineLogging": true
-            }
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "${env:PATH};${workspaceFolder}/External/bin"
+                }
+            ]
         },
         //Linux
         {

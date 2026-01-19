@@ -12,16 +12,28 @@
             }
         },
         {
-            "name": "windows-msvc-ninja",
+            "name": "n_cc",
+            "displayName": "Generate Ninja compile commands",
             "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-msvc",
+            "inherits": "base",
+            "generator": "Visual Studio 17 2022",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
             },
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "cl.exe",
-                "CMAKE_CXX_COMPILER": "cl.exe"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
             }
         },
         {
@@ -37,12 +49,12 @@
     "buildPresets": [
         {
             "name": "win64-release",
-            "configurePreset": "windows-msvc-ninja",
+            "configurePreset": "windows-msvc",
             "configuration": "Release"
         },
         {
             "name": "win64-debug",
-            "configurePreset": "windows-msvc-ninja",
+            "configurePreset": "windows-msvc",
             "configuration": "Debug"
         }
     ]
