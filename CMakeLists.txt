@@ -123,7 +123,7 @@ if (MSVC)
     add_compile_options(
         /W3 # warning level 3
         /MP # multi-processor compilation
-        /EHsc- # exceptions disabled
+        /EHsc # exceptions disabled
         /GR- # runtime type information disabled
         $<$<CONFIG:Release>:/GS-> # security check disabled in Release
     )
