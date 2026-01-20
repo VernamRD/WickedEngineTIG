@@ -19,6 +19,11 @@
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "Boost_INCLUDE_DIR": "$env{VCPKG_ROOT}/installed/x64-windows/include"
             }
         },
         {
@@ -31,7 +36,7 @@
                 "rhs": "Windows"
             },
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "OFF",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
             }
