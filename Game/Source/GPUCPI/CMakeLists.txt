@@ -1,5 +1,8 @@
 project(GPUCPI LANGUAGES CXX)
 
+# Boost
+find_package(Boost REQUIRED CONFIG COMPONENTS unordered container)
+
 # Modules
 set(MODULE_DEPEND
     Core
@@ -12,6 +15,17 @@ file(GLOB SOURCES
 )
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    target_include_directories(${PROJECT_NAME} PRIVATE 
+        ${Boost_INCLUDE_DIRS}
+    )
+endif()
+
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    Boost::unordered
+    Boost::container
+)
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC include
