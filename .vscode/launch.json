@@ -17,7 +17,8 @@
                     "name": "PATH",
                     "value": "${env:PATH};${workspaceFolder}/External/bin"
                 }
-            ]
+            ],
+            "visualizerFile": "${workspaceFolder}/WickedEngine/wickedengine.natvis"
         },
         //Linux
         {
