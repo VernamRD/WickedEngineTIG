@@ -21,8 +21,6 @@
                 "rhs": "Windows"
             },
             "cacheVariables": {
-                "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_C_COMPILER": "clang",
                 "Boost_INCLUDE_DIR": "$env{VCPKG_ROOT}/installed/x64-windows/include"
             }
         },
