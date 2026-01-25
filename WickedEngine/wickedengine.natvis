@@ -13,12 +13,21 @@
 		</Expand>
 	</Type>
 
-	<Type Name="wi::allocator::shared_ptr&lt;*&gt;">
-		<DisplayString>{{ handle={handle} }}</DisplayString>
+		<Type Name="wi::allocator::shared_ptr&lt;*&gt;">
+		<DisplayString Condition="handle == 0">empty</DisplayString>
+		<DisplayString>{($T1*)(handle &amp; (~0ull &lt;&lt; 8ull))}</DisplayString>
+		
 		<Expand>
-			<Item Name="[ptr]">reinterpret_cast&lt;$T1*&gt;(handle &amp; (~0ull &lt;&lt; 8ull))</Item>
-			<Item Name="[allocator]">shared_allocators[handle &amp; 0xFF]</Item>
+			<ExpandedItem Condition="handle != 0">($T1*)(handle &amp; (~0ull &lt;&lt; 8ull))</ExpandedItem>
+			
+			<Item Name="[handle]" ExcludeView="simple">handle, x</Item>
+			<Item Name="[allocator_index]" Condition="handle != 0">handle &amp; 0xFF</Item>
+			
+			<Item Name="[use_count]" Condition="handle != 0">
+				wi::allocator::shared_allocators[handle &amp; 0xFF]->get_refcount(($T1*)(handle &amp; (~0ull &lt;&lt; 8ull)))
+			</Item>
 		</Expand>
 	</Type>
+
 	
 </AutoVisualizer>
