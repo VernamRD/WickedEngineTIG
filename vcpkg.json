@@ -1,8 +1,0 @@
-{
-  "name": "wickedengine-project",
-  "version": "1.0.0",
-  "dependencies": [
-    "boost-unordered",
-    "boost-container"
-  ]
-}
