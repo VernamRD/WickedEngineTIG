@@ -1,39 +1,89 @@
 #pragma once
 
 #include <wiAllocator.h>
+#include <type_traits>
 
 namespace Giperion
 {
     namespace GPUCPI
     {
         class CPITask;
+        class CPITaskHandle;
 
+        using PrerequisitesType = wi::vector<CPITaskHandle>;
         using CPITaskPtr = std::shared_ptr<CPITask>;
 
         class CPITaskHandle
         {
+        public:
             using HandleType = CPITaskPtr;
 
-        public:
             CPITaskHandle() = delete;
             CPITaskHandle(const CPITaskPtr& task);
 
-            HandleType GetHandle() const { return m_handle; }
+            const std::string& GetName() const;
+            const PrerequisitesType& GetPrerequisites() const;
+
+            bool IsValid() const { return m_handle != nullptr; }
+
+            bool operator==(const CPITaskHandle&) const = default;
+            inline size_t hash_value() const
+            {
+                return std::hash<CPITask*>{}(m_handle.get());
+            }
 
         private:
+            CPITaskPtr GetTaskPtr() const;
+
             HandleType m_handle;
         };
 
         class CPITask
         {
         public:
-            CPITask(const wi::vector<CPITaskHandle>& prerequisites);
+            template <typename TaskType>
+                requires std::derived_from<TaskType, CPITask>
+            static CPITaskHandle CreateTask(std::string&& name)
+            {
+                auto task = std::shared_ptr<TaskType>(new TaskType(std::move(name)));
+                return task->InitHandle(task);
+            }
 
-            const wi::vector<CPITaskHandle>& GetPrerequisites() const;
+            template <typename TaskType>
+                requires std::derived_from<TaskType, CPITask>
+            static CPITaskHandle CreateTask(std::string&& name, PrerequisitesType prerequisites)
+            {
+                auto task = std::shared_ptr<TaskType>(new TaskType(std::move(name), prerequisites));
+                return task->InitHandle(task);
+            }
+
+            CPITaskHandle InitHandle(CPITaskPtr thisPtr) const;
+            const PrerequisitesType& GetPrerequisites() const;
+            virtual void Execute() {}
+
+            const std::string& GetName() const { return m_name; }
 
         private:
-            wi::vector<CPITaskHandle> m_prerequisites;
+            CPITask() = delete;
+            CPITask(std::string&& inName);
+            CPITask(std::string&& inName, const wi::vector<CPITaskHandle>& prerequisites);
+
+            std::string m_name;
+            PrerequisitesType m_prerequisites;
         };
+
     }  // namespace GPUCPI
 
 }  // namespace Giperion
+
+namespace std
+{
+    template <>
+    struct hash<Giperion::GPUCPI::CPITaskHandle>
+    {
+        size_t operator()(const Giperion::GPUCPI::CPITaskHandle& handle) const noexcept
+        {
+            return handle.hash_value();
+        }
+    };
+}  // namespace std

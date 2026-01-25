@@ -11,6 +11,10 @@ file(GLOB SOURCES
     include/*.h
 )
 
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 target_include_directories(${PROJECT_NAME}
