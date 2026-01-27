@@ -2,7 +2,7 @@
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
         CPITaskHandle::CPITaskHandle::CPITaskHandle(const CPITaskPtr& task)
         {
@@ -41,5 +41,5 @@ namespace Giperion
             return m_prerequisites;
         }
 
-    }  // namespace GPUCPI
+    }  // namespace CPI
 }  // namespace Giperion

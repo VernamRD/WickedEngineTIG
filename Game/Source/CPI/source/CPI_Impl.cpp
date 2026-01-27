@@ -1,28 +1,28 @@
-#include "GPUCPI_Impl.h"
+#include "CPI_Impl.h"
 #include <wiProfiler.h>
 
 #include <Core.h>
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
 
-        void GPUCPI_Impl::Initialize()
+        void CPI_Impl::Initialize()
         {
             GLThread = std::jthread([this](std::stop_token token) { main(token); });
             Giperion::Core::SetThreadName(GLThread.native_handle(), "GLT");
         }
 
-        void GPUCPI_Impl::Deinitialize()
+        void CPI_Impl::Deinitialize()
         {
             GLThread.request_stop();
             GLThread.join();
         }
 
-        bool GPUCPI_Impl::IsInitialized() { return GLThread.native_handle(); }
+        bool CPI_Impl::IsInitialized() { return GLThread.native_handle(); }
 
-        void GPUCPI_Impl::main(std::stop_token token)
+        void CPI_Impl::main(std::stop_token token)
         {
             while (!token.stop_requested())
             {
@@ -30,5 +30,5 @@ namespace Giperion
                 std::this_thread::yield();
             }
         }
-    }  // namespace GPUCPI
+    }  // namespace CPI
 }  // namespace Giperion

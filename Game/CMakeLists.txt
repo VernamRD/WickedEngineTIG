@@ -4,7 +4,7 @@ project(Game)
 set(PROJECT_MODULES
     GLT
     Core
-    GPUCPI
+    CPI
 )
 
 # Enable testing

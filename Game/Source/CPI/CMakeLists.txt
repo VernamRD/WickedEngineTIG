@@ -1,4 +1,4 @@
-project(GPUCPI LANGUAGES CXX)
+project(CPI LANGUAGES CXX)
 
 # Modules
 set(MODULE_DEPEND
@@ -19,7 +19,8 @@ add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC include
-    PUBLIC ${WICKED_ROOT_DIR}  # доступ к WickedEngine
+    PUBLIC ${WICKED_ROOT_DIR} 
+    PRIVATE source
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC WickedEngine)

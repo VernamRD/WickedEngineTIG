@@ -1,13 +1,13 @@
 #pragma once
 
-#include <GPUCPI.h>
+#include <CPI.h>
 #include <thread>
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
-        class GPUCPI_Impl : public Giperion::GPUCPI::GPUCPI
+        class CPI_Impl : public Giperion::CPI::CPI
         {
         public:
             void Initialize() override;
@@ -20,6 +20,6 @@ namespace Giperion
 
             std::jthread GLThread;
         };
-    }  // namespace GPUCPI
+    }  // namespace CPI
 
 }  // namespace Giperion

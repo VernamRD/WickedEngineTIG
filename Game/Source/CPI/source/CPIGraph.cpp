@@ -4,7 +4,7 @@
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
         CPIGraph::CPIGraph()
         {
@@ -15,12 +15,14 @@ namespace Giperion
         bool CPIGraph::AddTask(CPITaskHandle task)
         {
             m_tasksToCompile.push_back(task);
+            MarkGraphDirty();
+
             return true;
         }
 
         bool CPIGraph::Compile()
         {
-            if (m_tasksToCompile.empty()) return true;
+            if (m_state != EGraphState::MustBeRecompile && m_tasksToCompile.empty()) return true;
 
             std::vector<CPIGraphNodePtr> nodesWithPrerequisite;
 
@@ -87,6 +89,8 @@ namespace Giperion
                 }
             }
 
+            m_state = EGraphState::UpToDate;
+
             return true;
         }
 
@@ -95,5 +99,5 @@ namespace Giperion
             return m_nodesByHandle.contains(handle) ? m_nodesByHandle[handle]
                                                     : CPIGraphNodeWeakPtr{};
         }
-    }  // namespace GPUCPI
+    }  // namespace CPI
 }  // namespace Giperion

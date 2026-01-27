@@ -5,7 +5,7 @@
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
         class CPITask;
         class CPITaskHandle;
@@ -72,16 +72,16 @@ namespace Giperion
             PrerequisitesType m_prerequisites;
         };
 
-    }  // namespace GPUCPI
+    }  // namespace CPI
 
 }  // namespace Giperion
 
 namespace std
 {
     template <>
-    struct hash<Giperion::GPUCPI::CPITaskHandle>
+    struct hash<Giperion::CPI::CPITaskHandle>
     {
-        size_t operator()(const Giperion::GPUCPI::CPITaskHandle& handle) const noexcept
+        size_t operator()(const Giperion::CPI::CPITaskHandle& handle) const noexcept
         {
             return handle.hash_value();
         }

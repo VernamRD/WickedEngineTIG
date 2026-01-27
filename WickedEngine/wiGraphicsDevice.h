@@ -51,7 +51,7 @@ namespace wi::graphics
 	class GraphicsDevice
 	{
 	protected:
-		static constexpr uint32_t BUFFERCOUNT = 2;
+        static constexpr uint32_t BUFFERCOUNT = 2;
 		uint64_t FRAMECOUNT = 0;
 		size_t SHADER_IDENTIFIER_SIZE = 0;
 		size_t TOPLEVEL_ACCELERATION_STRUCTURE_INSTANCE_SIZE = 0;
@@ -101,12 +101,17 @@ namespace wi::graphics
 
 		// Begin a new command list for GPU command recording.
 		//	This will be valid until SubmitCommandLists() is called.
-		virtual CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS) = 0;
+		virtual CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, bool independent = false) = 0;
 		// Submit all command list that were used with BeginCommandList before this call.
 		//	This will make every command list to be in "available" state and restarts them
 		virtual void SubmitCommandLists() = 0;
 
-		// The CPU will wait until all submitted GPU work is finished execution
+        // Begin a new command list that will be submitted independently of other command lists.
+        virtual CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS) = 0;
+        // Submit a single command list immediately, independently of the batch.
+        virtual std::shared_ptr<GPUFence> SubmitCommandList_Independent(CommandList cmd, const std::string& name) = 0;
+
+        // The CPU will wait until all submitted GPU work is finished execution
 		virtual void WaitForGPU() const = 0;
 
 		// The current PipelineState cache will be cleared. It is useful to clear this when reloading shaders, to avoid accumulating unused pipeline states

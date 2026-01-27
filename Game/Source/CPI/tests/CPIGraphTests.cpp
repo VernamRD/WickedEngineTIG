@@ -3,7 +3,7 @@
 
 #include "CPIGraph.h"
 
-using namespace Giperion::GPUCPI;
+using namespace Giperion::CPI;
 
 template <typename GetNodesFunc>
 testing::AssertionResult Contains(CPIGraphNodePtr inNode,

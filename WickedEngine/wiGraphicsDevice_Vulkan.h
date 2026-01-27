@@ -13,6 +13,7 @@
 #include "wiSpinLock.h"
 #include "wiBacklog.h"
 #include "wiHelper.h"
+#include "wiPool.h"
 
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -104,13 +105,59 @@ namespace std
 			return hash.get_hash();
 		}
 	};
+}  // namespace std
+
+// Fence
+namespace wi::graphics
+{
+    class GraphicsDevice_Vulkan;
+    struct VkFencePool;
+
+    struct GPUFence_VK : public GPUFence
+    {
+	public:
+        void CPUWait() override;
+        bool IsSignaled() override;
+
+        void SetName(const std::string& name);
+        VkFence Get() const { return m_fence; }
+
+        void Initialize(VkFencePool* parentPool);
+        void Reset();
+        void Destroy();
+
+    private:
+        VkFence m_fence = VK_NULL_HANDLE;
+        VkFencePool* m_pool = nullptr;
+    };
+
+    struct VkFencePool : public wi::pool::Pool<GPUFence_VK>
+    {
+    public:
+        VkFencePool(size_t initialSize = 256)
+            : wi::pool::Pool<GPUFence_VK>(initialSize)
+        {
+        }
+
+        void Initialize(GraphicsDevice_Vulkan* device);
+        GraphicsDevice_Vulkan* GetDevice() const { return m_deviceOwner; }
+
+    protected:
+        void OnInitialize(value_type* item) override;
+        void OnAcquire(value_type* item) override;
+        void OnRelease(value_type* item) override;
+        void OnDeinitialize(value_type* item) override;
+
+        GraphicsDevice_Vulkan* m_deviceOwner = nullptr;
+    };
 }
 
 namespace wi::graphics
 {
 	class GraphicsDevice_Vulkan final : public GraphicsDevice
-	{
-		friend struct CommandQueue;
+    {
+        friend struct GPUFence_VK;
+        friend struct CommandQueue;
 	protected:
 		VkInstance instance = VK_NULL_HANDLE;
 	    VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
@@ -256,10 +303,11 @@ namespace wi::graphics
 		TransitionHandler transition_handlers[BUFFERCOUNT];
 		inline TransitionHandler& GetTransitionHandler() { return transition_handlers[GetBufferIndex()]; }
 
-		VkFence frame_fence[BUFFERCOUNT][QUEUE_COUNT] = {};
+        VkFence frame_fence[BUFFERCOUNT][QUEUE_COUNT] = {};
+        VkFencePool fencePool;
 
-		struct DescriptorBinder
-		{
+        struct DescriptorBinder
+        {
 			DescriptorBindingTable table;
 			GraphicsDevice_Vulkan* device;
 
@@ -331,6 +379,7 @@ namespace wi::graphics
 
 			QUEUE_TYPE queue = {};
 			uint32_t id = 0;
+			bool b_independent = false;
 			wi::vector<VkSemaphore> waits;
 			wi::vector<VkSemaphore> signals;
 
@@ -359,6 +408,7 @@ namespace wi::graphics
 			void reset(uint32_t bufferindex)
 			{
 				buffer_index = bufferindex;
+				b_independent = false;
 				waits.clear();
 				signals.clear();
 				binder_pools[buffer_index].reset();
@@ -440,10 +490,13 @@ namespace wi::graphics
 		void SetName(GPUResource* pResource, const char* name) const override;
 		void SetName(Shader* shader, const char* name) const override;
 
-		CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS) override;
-		void SubmitCommandLists() override;
+        CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, bool independent = false) override;
+        void SubmitCommandLists() override;
 
-		void WaitForGPU() const override;
+        CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS) override;
+        std::shared_ptr<GPUFence> SubmitCommandList_Independent(CommandList cmd, const std::string& name) override;
+
+        void WaitForGPU() const override;
 		void ClearPipelineStateCache() override;
 		size_t GetActivePipelineCount() const override { return pipelines_global.size(); }
 

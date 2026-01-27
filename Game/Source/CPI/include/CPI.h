@@ -1,16 +1,17 @@
 #pragma once
 
-#include <WickedEngine.h>  // подключение движка
+#include "CPITask.h"
+#include <WickedEngine.h>
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
         // Graphics Processing Units Compute Pipeline Interface
-        class GPUCPI
+        class CPI
         {
         public:
-            virtual ~GPUCPI() = default;
+            virtual ~CPI() = default;
 
             virtual void Initialize() = 0;
             virtual void Deinitialize() = 0;
@@ -20,6 +21,16 @@ namespace Giperion
         void Init();
         bool IsInitialized();
         void Deinitialize();
-        GPUCPI& Get();
-    }  // namespace GPUCPI
+        CPI& Get();
+
+        class CPUTask : public CPITask
+        {
+            
+        };
+
+        class GPUTask : public CPITask
+        {
+            
+        };
+    }  // namespace CPI
 }  // namespace Giperion

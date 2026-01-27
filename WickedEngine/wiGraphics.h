@@ -682,6 +682,14 @@ namespace wi::graphics
 		PrimitiveTopology		pt = PrimitiveTopology::TRIANGLELIST;
 		uint32_t                patch_control_points = 3;
 		uint32_t				sample_mask = 0xFFFFFFFF;
+    };
+
+    class GPUFence
+    {
+    public:
+		virtual ~GPUFence() = default;
+        virtual void CPUWait() = 0;
+        virtual bool IsSignaled() = 0;
 	};
 
 	struct GPUBarrier

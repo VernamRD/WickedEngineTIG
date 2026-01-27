@@ -6,7 +6,7 @@
 
 namespace Giperion
 {
-    namespace GPUCPI
+    namespace CPI
     {
         class CPIGraph_Node;
         class CPIGraph;
@@ -46,6 +46,12 @@ namespace Giperion
             CPITaskHandle m_task;
         };
 
+        enum class EGraphState : uint8_t
+        {
+            UpToDate,
+            MustBeRecompile,
+        };
+
         class CPIGraph
         {
         public:
@@ -58,6 +64,9 @@ namespace Giperion
             CPIGraphNodeWeakPtr GetRootNode() const { return m_rootNode; }
             CPIGraphNodeWeakPtr GetNode(CPITaskHandle handle);
 
+            void MarkGraphDirty() { m_state = EGraphState::MustBeRecompile; }
+            EGraphState GetState() { return m_state; }
+
         private:
             CPITaskHandle CreateTaskHandle(const CPITaskPtr& task);
             CPIGraphNodePtr m_rootNode;
@@ -67,7 +76,9 @@ namespace Giperion
 
             // Tasks that have prerequisites but cannot currently reference them
             wi::vector<CPITaskHandle> m_abandonedTasks;
+
+            EGraphState m_state;
         };
-    }  // namespace GPUCPI
+    }  // namespace CPI
 
 }  // namespace Giperion
