@@ -22,6 +22,10 @@ check_ipo_supported(RESULT ipo_supported)
 
 set(WICKED_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
+
+option(WICKED_BUILD_DX12 "Build WickedEngine with DirectX 12 support (Windows only)" OFF)
+option(WICKED_BUILD_VULKAN "Build WickedEngine with Vulkan support" ON)
+
 option(WICKED_DYNAMIC_LIBRARY "Build WickedEngine as a dynamic library" OFF)
 option(WICKED_PIC "Build WickedEngine as position-independent code" WICKED_DYNAMIC_LIBRARY)
 option(USE_LIBCXX "Link WickedEngine to llvm libc++ library - only available with the Clang compiler" OFF)
@@ -118,6 +122,14 @@ elseif (UNIX)
     set(PLATFORM "SDL2")
     add_compile_definitions(SDL2=1)
     add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=1)
+endif()
+
+if(WICKED_BUILD_DX12)
+    add_compile_definitions(BUILD_DX12)
+endif()
+
+if(WICKED_BUILD_VULKAN)
+    add_compile_definitions(BUILD_VULKAN)
 endif()
 
 if (MSVC)

@@ -2,9 +2,9 @@
 #include "CommonInclude.h"
 #include "wiPlatform.h"
 
-#ifdef _WIN32
+#if defined(_WIN32) && defined(BUILD_DX12)
 #define WICKEDENGINE_BUILD_DX12
-#endif // _WIN32
+#endif  // _WIN32 && BUILD_DX12
 
 #ifdef WICKEDENGINE_BUILD_DX12
 #include "wiGraphicsDevice.h"
