@@ -1402,7 +1402,8 @@ namespace wi::helper
 
     std::string GetRootDir()
     {
-        return wi::helper::GetDirectoryFromPath(wi::helper::GetExecutablePath()); }
+        return wi::helper::GetDirectoryFromPath(wi::helper::GetExecutablePath());
+    }
 
     void FileDialog(const FileDialogParams& params, const std::function<void(std::string fileName)>& onSuccess, const std::function<void()>& onFailure)
 	{
