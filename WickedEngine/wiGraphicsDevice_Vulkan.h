@@ -457,6 +457,7 @@ namespace wi::graphics
 		static constexpr uint32_t immutable_sampler_slot_begin = 100;
 		wi::vector<VkSampler> immutable_samplers;
 
+        void set_command_buffer_name(VkCommandBuffer commandBuffer, const char* name);
 		void set_fence_name(VkFence fence, const char* name);
 		void set_semaphore_name(VkSemaphore semaphore, const char* name);
 
@@ -490,11 +491,12 @@ namespace wi::graphics
 		void SetName(GPUResource* pResource, const char* name) const override;
 		void SetName(Shader* shader, const char* name) const override;
 
-        CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, bool independent = false) override;
+        CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, const std::string& name = "untitled", bool independent = false) override;
         void SubmitCommandLists() override;
 
-        CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS) override;
-        std::shared_ptr<GPUFence> SubmitCommandList_Independent(CommandList cmd, const std::string& name) override;
+        CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS, const std::string& name = "untitled") override;
+        [[nodiscard]] virtual std::shared_ptr<GPUFence> SubmitCommandList_Independent_Fenced(CommandList cmd) override;
+        virtual void SubmitCommandList_Independent(CommandList cmd) override;
 
         void WaitForGPU() const override;
 		void ClearPipelineStateCache() override;

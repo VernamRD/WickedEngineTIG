@@ -15,7 +15,7 @@ namespace wi::graphics
 	//	Use GraphicsDevice::SubmitCommandLists() to give all started command lists to the GPU for execution
 	//	CommandList recording is not thread safe
 	struct CommandList
-	{
+    {
 		void* internal_state = nullptr;
 		constexpr bool IsValid() const { return internal_state != nullptr; }
 	};
@@ -101,15 +101,20 @@ namespace wi::graphics
 
 		// Begin a new command list for GPU command recording.
 		//	This will be valid until SubmitCommandLists() is called.
-		virtual CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, bool independent = false) = 0;
-		// Submit all command list that were used with BeginCommandList before this call.
+        virtual CommandList BeginCommandList(QUEUE_TYPE queue = QUEUE_GRAPHICS, const std::string& name = "untitled", bool independent = false) = 0;
+        // Submit all command list that were used with BeginCommandList before this call.
 		//	This will make every command list to be in "available" state and restarts them
 		virtual void SubmitCommandLists() = 0;
 
         // Begin a new command list that will be submitted independently of other command lists.
-        virtual CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS) = 0;
+        virtual CommandList BeginCommandList_Independent(QUEUE_TYPE queue = QUEUE_GRAPHICS, const std::string& name = "untitled") = 0;
+
+        /** Submit a single command list immediately, independently of the batch.
+         *  @return GPUFence must be handled until complete commands to avoid unbehavior!
+		 */
+        [[nodiscard]] virtual std::shared_ptr<GPUFence> SubmitCommandList_Independent_Fenced(CommandList cmd) = 0;
         // Submit a single command list immediately, independently of the batch.
-        virtual std::shared_ptr<GPUFence> SubmitCommandList_Independent(CommandList cmd, const std::string& name) = 0;
+        virtual void SubmitCommandList_Independent(CommandList cmd) = 0;
 
         // The CPU will wait until all submitted GPU work is finished execution
 		virtual void WaitForGPU() const = 0;

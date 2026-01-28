@@ -47,14 +47,14 @@ wi::platform::window_type CPITasksFixture::window = {};
 
 TEST_F(CPITasksFixture, SubmitComputeCommandListIndependently)
 {
-    CommandList cmd = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmd = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitComputeCommandListIndependently");
     ASSERT_TRUE(cmd.IsValid());
 
     GPUBarrier barrier{};
     barrier.type = GPUBarrier::Type::MEMORY;
     device->Barrier(&barrier, 1, cmd);
 
-    auto fence = device->SubmitCommandList_Independent(cmd, "SubmitComputeCommandListIndependently");
+    auto fence = device->SubmitCommandList_Independent_Fenced(cmd);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
@@ -65,36 +65,36 @@ TEST_F(CPITasksFixture, SubmitComputeCommandListIndependently)
 
 TEST_F(CPITasksFixture, SubmitComputeCommandListWithCPUWait)
 {
-    CommandList cmd = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmd = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitComputeCommandListWithCPUWait");
     ASSERT_TRUE(cmd.IsValid());
 
     GPUBarrier barrier{};
     barrier.type = GPUBarrier::Type::MEMORY;
     device->Barrier(&barrier, 1, cmd);
 
-    auto fence = device->SubmitCommandList_Independent(cmd, "SubmitComputeCommandListWithCPUWait");
+    auto fence = device->SubmitCommandList_Independent_Fenced(cmd);
 
     fence->CPUWait();
 }
 
 TEST_F(CPITasksFixture, SubmitCommandListWithDependencies)
 {
-    CommandList cmdA = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdA = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_A");
     ASSERT_TRUE(cmdA.IsValid());
     
     GPUBarrier barrier{};
     barrier.type = GPUBarrier::Type::MEMORY;
     device->Barrier(&barrier, 1, cmdA);
 
-    CommandList cmdB = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdB = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_B");
     ASSERT_TRUE(cmdB.IsValid());
     
     device->WaitCommandList(cmdB, cmdA);
     
     device->Barrier(&barrier, 1, cmdB);
-    
-    auto fenceA = device->SubmitCommandList_Independent(cmdA, "SubmitCommandListWithDependencies_A");
-    auto fenceB = device->SubmitCommandList_Independent(cmdB, "SubmitCommandListWithDependencies_B");
+
+    auto fenceA = device->SubmitCommandList_Independent_Fenced(cmdA);
+    auto fenceB = device->SubmitCommandList_Independent_Fenced(cmdB);
 
     fenceB->CPUWait();
     
@@ -104,32 +104,32 @@ TEST_F(CPITasksFixture, SubmitCommandListWithDependencies)
 
 TEST_F(CPITasksFixture, SubmitCommandListWithDependenciesMultiple)
 {
-    CommandList cmdA = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdA = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_A");
     ASSERT_TRUE(cmdA.IsValid());
 
     GPUBarrier barrier{};
     barrier.type = GPUBarrier::Type::MEMORY;
     device->Barrier(&barrier, 1, cmdA);
 
-    CommandList cmdB = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdB = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_B");
     ASSERT_TRUE(cmdB.IsValid());
     device->WaitCommandList(cmdB, cmdA);
     device->Barrier(&barrier, 1, cmdB);
 
-    CommandList cmdC = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdC = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_C");
     ASSERT_TRUE(cmdC.IsValid());
     device->WaitCommandList(cmdC, cmdB);
     device->Barrier(&barrier, 1, cmdC);
 
-    CommandList cmdD = device->BeginCommandList_Independent(QUEUE_COMPUTE);
+    CommandList cmdD = device->BeginCommandList_Independent(QUEUE_COMPUTE, "SubmitCommandListWithDependencies_D");
     ASSERT_TRUE(cmdD.IsValid());
     device->WaitCommandList(cmdD, cmdC);
     device->Barrier(&barrier, 1, cmdD);
 
-    auto fenceA = device->SubmitCommandList_Independent(cmdA, "SubmitCommandListWithDependencies_A");
-    auto fenceB = device->SubmitCommandList_Independent(cmdB, "SubmitCommandListWithDependencies_B");
-    auto fenceC = device->SubmitCommandList_Independent(cmdC, "SubmitCommandListWithDependencies_C");
-    auto fenceD = device->SubmitCommandList_Independent(cmdD, "SubmitCommandListWithDependencies_D");
+    auto fenceA = device->SubmitCommandList_Independent_Fenced(cmdA);
+    auto fenceB = device->SubmitCommandList_Independent_Fenced(cmdB);
+    auto fenceC = device->SubmitCommandList_Independent_Fenced(cmdC);
+    auto fenceD = device->SubmitCommandList_Independent_Fenced(cmdD);
 
     fenceD->CPUWait();
 

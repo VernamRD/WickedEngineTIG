@@ -1383,6 +1383,19 @@ void wi::graphics::VkFencePool::Initialize(GraphicsDevice_Vulkan* device)
 	Pool<GPUFence_VK>::Initialize();
 }
 
+void GraphicsDevice_Vulkan::set_command_buffer_name(VkCommandBuffer cmd, const char* name)
+{
+	if (!debugUtils) return;
+	if (cmd == VK_NULL_HANDLE) return;
+
+    VkDebugUtilsObjectNameInfoEXT info{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    info.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
+    info.objectHandle = (uint64_t)cmd;
+    info.pObjectName = name;
+
+    vkSetDebugUtilsObjectNameEXT(device, &info);
+}
+
 void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 {
     if (!debugUtils) return;
@@ -7215,7 +7228,7 @@ void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 		vulkan_check(vkSetDebugUtilsObjectNameEXT(device, &info));
 	}
 
-    CommandList GraphicsDevice_Vulkan::BeginCommandList(QUEUE_TYPE queue, bool independent)
+    CommandList GraphicsDevice_Vulkan::BeginCommandList(QUEUE_TYPE queue, const std::string& name, bool independent)
     {
 		cmd_locker.lock();
 		uint32_t cmd_current = cmd_count++;
@@ -7339,7 +7352,9 @@ void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 			}
 		}
 
-		return cmd;
+        set_command_buffer_name(commandlist.GetCommandBuffer(), name.c_str());
+
+        return cmd;
 	}
 	void GraphicsDevice_Vulkan::SubmitCommandLists()
 	{
@@ -7572,12 +7587,12 @@ void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 		vulkan_check(vkDeviceWaitIdle(device));
 	}
 
-    CommandList GraphicsDevice_Vulkan::BeginCommandList_Independent(QUEUE_TYPE queue)
+    CommandList GraphicsDevice_Vulkan::BeginCommandList_Independent(QUEUE_TYPE queue, const std::string& name)
     {
-		return BeginCommandList(queue, true);
-	}
+        return BeginCommandList(queue, name, true);
+    }
 
-    std::shared_ptr<GPUFence> GraphicsDevice_Vulkan::SubmitCommandList_Independent(CommandList cmd, const std::string& name)
+    std::shared_ptr<GPUFence> GraphicsDevice_Vulkan::SubmitCommandList_Independent_Fenced(CommandList cmd)
     {
         CommandList_Vulkan& commandlist = GetCommandList(cmd);
         wilog_assert(commandlist.b_independent, "SubmitCommandList_Independent can only be called for independent command lists");
@@ -7657,15 +7672,102 @@ void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 		}
 		commandlist.pipelines_worker.clear();
 
+        std::shared_ptr<VkFencePool::value_type> fence;
+
         // Create fence
-        auto fence = fencePool.Acquire();
-        fence->SetName(name);
-        
-		// Submit the command buffer
-		queue.submit(this, fence->Get());
+        fence = fencePool.Acquire();
+        fence->SetName("Independent CommandList Fence");
+
+        // Submit the command buffer
+        queue.submit(this, fence->Get());
 
         return std::move(fence);
-	}
+    }
+
+    void GraphicsDevice_Vulkan::SubmitCommandList_Independent(CommandList cmd)
+	{
+        CommandList_Vulkan& commandlist = GetCommandList(cmd);
+        wilog_assert(commandlist.b_independent, "SubmitCommandList_Independent can only be called for independent command lists");
+
+        // Finish recording
+        vulkan_check(vkEndCommandBuffer(commandlist.GetCommandBuffer()));
+
+        CommandQueue& queue = queues[commandlist.queue];
+        const bool dependency = !commandlist.signals.empty() || !commandlist.waits.empty();
+
+        if (dependency)
+        {
+            // Flush any pending work before handling dependency to keep synchronization localized
+            queue.submit(this, VK_NULL_HANDLE);
+        }
+
+        // Add the command buffer to the immediate submit
+        VkCommandBufferSubmitInfo& cbSubmitInfo = queue.submit_cmds.emplace_back();
+        cbSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cbSubmitInfo.commandBuffer = commandlist.GetCommandBuffer();
+
+        // Handle swapchain synchronization and present if needed
+        queue.swapchain_updates = commandlist.prev_swapchains;
+        for (auto& swapchain : commandlist.prev_swapchains)
+        {
+            auto internal_state = to_internal(&swapchain);
+
+            VkSemaphoreSubmitInfo& waitSemaphore = queue.submit_waitSemaphoreInfos.emplace_back();
+            waitSemaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            waitSemaphore.semaphore = internal_state->swapchainAcquireSemaphores[internal_state->swapChainAcquireSemaphoreIndex];
+            waitSemaphore.value = 0;  // not a timeline semaphore
+            waitSemaphore.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+            VkSemaphoreSubmitInfo& signalSemaphore = queue.submit_signalSemaphoreInfos.emplace_back();
+            signalSemaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            signalSemaphore.semaphore = internal_state->swapchainReleaseSemaphores[internal_state->swapChainImageIndex];
+            signalSemaphore.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            signalSemaphore.value = 0;  // not a timeline semaphore
+
+            queue.swapchains.push_back(internal_state->swapChain);
+            queue.swapchainImageIndices.push_back(internal_state->swapChainImageIndex);
+            queue.swapchainWaitSemaphores.push_back(signalSemaphore.semaphore);
+        }
+
+        if (dependency)
+        {
+            for (auto& semaphore : commandlist.waits)
+            {
+                queue.wait(semaphore);
+            }
+            commandlist.waits.clear();
+
+            for (auto& semaphore : commandlist.signals)
+            {
+                queue.signal(semaphore);
+                free_semaphore(semaphore);
+            }
+            commandlist.signals.clear();
+
+            // Submit an intermediate batch to resolve dependencies cleanly
+            queue.submit(this, VK_NULL_HANDLE);
+        }
+
+        // Move any worker pipelines to global cache (match batched path)
+        for (auto& x : commandlist.pipelines_worker)
+        {
+            if (pipelines_global.count(x.first) == 0)
+            {
+                pipelines_global[x.first] = x.second;
+            }
+            else
+            {
+                allocationhandler->destroylocker.lock();
+                allocationhandler->destroyer_pipelines.push_back(std::make_pair(x.second, FRAMECOUNT));
+                allocationhandler->destroylocker.unlock();
+            }
+        }
+        commandlist.pipelines_worker.clear();
+        
+        // Submit the command buffer
+        queue.submit(this, VK_NULL_HANDLE);
+    }
+    
 	void GraphicsDevice_Vulkan::ClearPipelineStateCache()
 	{
 		allocationhandler->destroylocker.lock();
