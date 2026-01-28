@@ -45,7 +45,11 @@ file(GLOB SOURCE_FILES
     "Source/*.h"
 )
 
-set(LIB_DXCOMPILER "dxcompiler.dll")
+if(WIN32)
+    set(LIB_DXCOMPILER "dxcompiler.dll")
+else()
+    set(LIB_DXCOMPILER "libdxcompiler.so")
+endif()
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 

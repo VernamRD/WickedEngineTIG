@@ -30,7 +30,18 @@ namespace Giperion
 
         class GPUTask : public CPITask
         {
-            
+        };
+
+        class CPIShader
+        {
+        public:
+            virtual void Initialize(wi::graphics::GraphicsDevice* device, wi::graphics::CommandList cmd) = 0;
+            virtual void Execute(wi::graphics::GraphicsDevice* device, wi::graphics::CommandList cmd) = 0;
+
+            bool IsInitialized() const { return m_initialized; }
+
+        protected:
+            std::atomic_bool m_initialized = false;
         };
     }  // namespace CPI
 }  // namespace Giperion

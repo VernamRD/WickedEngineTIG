@@ -139,6 +139,7 @@ if (MSVC)
         /EHsc # exceptions disabled
         /GR- # runtime type information disabled
         $<$<CONFIG:Release>:/GS-> # security check disabled in Release
+        /Zc:__cplusplus # correct __cplusplus value
     )
 else()
     set(ubsan_active
