@@ -1,11 +1,9 @@
+list(APPEND CMAKE_MODULE_PATH "${WICKED_ROOT_DIR}/cmake")
+include(ModuleHelpers)
+
 project(Game)
 
-# Module library
-set(PROJECT_MODULES
-    GLT
-    Core
-    CPI
-)
+set(GAME_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Enable testing
 option(BUILD_TESTING "Build the testing tree" ON)
@@ -35,11 +33,6 @@ if(BUILD_TESTING)
     add_custom_target(AllGameTests)
 endif()
 
-# Add module subdirectories
-foreach(MODULE_NAME IN LISTS PROJECT_MODULES)
-    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Source/${MODULE_NAME}")
-endforeach()
-
 file(GLOB SOURCE_FILES
     "Source/*.cpp"
     "Source/*.h"
@@ -53,6 +46,11 @@ endif()
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
+project_add_modules(
+    MODULE_NAMES Core GLT CPI
+    MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Source"
+)
+
 if(BUILD_TESTING AND TARGET AllGameTests)
     add_dependencies(${PROJECT_NAME} AllGameTests)
 endif()
@@ -62,13 +60,6 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE "${WICKED_ROOT_DIR}/WickedEngi
 target_link_libraries(${PROJECT_NAME} PUBLIC
     WickedEngine
 )
-
-# Link modules
-foreach(MODULE_NAME IN LISTS PROJECT_MODULES)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${MODULE_NAME}
-    )
-endforeach()
 
 if(MSVC)
     add_compile_options(/MP)

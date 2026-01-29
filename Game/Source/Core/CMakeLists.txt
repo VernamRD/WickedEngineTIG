@@ -14,7 +14,6 @@ target_include_directories(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC WickedEngine)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /MP)
