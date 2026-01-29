@@ -1,6 +1,7 @@
 #pragma once
 
-#include "CPITask.h"
+#include "Tasks/CPITask.h"
+
 #include <wiAllocator.h>
 #include <unordered_map>
 

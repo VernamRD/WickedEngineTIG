@@ -9,6 +9,8 @@ set(MODULE_DEPEND
 file(GLOB SOURCES
     source/*.cpp
     include/*.h
+    source/Tasks/*.cpp
+    source/Tasks/*.h
 )
 
 if(BUILD_TESTING)

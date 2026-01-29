@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include "CPI.h"
 #include "CPIGraph.h"
 
 using namespace Giperion::CPI;
@@ -115,9 +116,9 @@ testing::AssertionResult NotContainsChildAny(
 
 TEST(CPIGraph, SimpleAdd)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto task2 = CPITask::CreateTask<CPITask>("task2");
-    auto task3 = CPITask::CreateTask<CPITask>("task3");
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto task2 = TaskFactory::CreateTask<CPUTask>("task2");
+    auto task3 = TaskFactory::CreateTask<CPUTask>("task3");
 
     CPIGraph graph;
     graph.AddTask(task1);
@@ -150,9 +151,9 @@ TEST(CPIGraph, SimpleAdd)
 
 TEST(CPIGraph, TwoPrerequisitedNodes)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto task2 = CPITask::CreateTask<CPITask>("task2", {task1});
-    auto task3 = CPITask::CreateTask<CPITask>("task3", {task1});
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto task2 = TaskFactory::CreateTask<CPUTask>("task2", {task1});
+    auto task3 = TaskFactory::CreateTask<CPUTask>("task3", {task1});
 
     CPIGraph graph;
     graph.AddTask(task1);
@@ -182,9 +183,9 @@ TEST(CPIGraph, TwoPrerequisitedNodes)
 
 TEST(CPIGraph, DoublePrerequisite)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto task2 = CPITask::CreateTask<CPITask>("task2");
-    auto task3 = CPITask::CreateTask<CPITask>("task3", {task1, task2});
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto task2 = TaskFactory::CreateTask<CPUTask>("task2");
+    auto task3 = TaskFactory::CreateTask<CPUTask>("task3", {task1, task2});
 
     CPIGraph graph;
     graph.AddTask(task1);
@@ -215,9 +216,9 @@ TEST(CPIGraph, DoublePrerequisite)
 
 TEST(CPIGraph, Hierarchy)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto task2 = CPITask::CreateTask<CPITask>("task2");
-    auto task3 = CPITask::CreateTask<CPITask>("task3", {task2});
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto task2 = TaskFactory::CreateTask<CPUTask>("task2");
+    auto task3 = TaskFactory::CreateTask<CPUTask>("task3", {task2});
 
     CPIGraph graph;
     graph.AddTask(task1);
@@ -247,9 +248,9 @@ TEST(CPIGraph, Hierarchy)
 
 TEST(CPIGraph, Hierarchy2)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto task2 = CPITask::CreateTask<CPITask>("task2", {task1});
-    auto task3 = CPITask::CreateTask<CPITask>("task3", {task2});
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto task2 = TaskFactory::CreateTask<CPUTask>("task2", {task1});
+    auto task3 = TaskFactory::CreateTask<CPUTask>("task3", {task2});
 
     CPIGraph graph;
     graph.AddTask(task1);
@@ -280,9 +281,9 @@ TEST(CPIGraph, Hierarchy2)
 
 TEST(CPIGraph, Abandoned)
 {
-    auto task1 = CPITask::CreateTask<CPITask>("task1");
-    auto abandonedTask1 = CPITask::CreateTask<CPITask>("abandonedTask1", {task1});
-    auto abandonedTask2 = CPITask::CreateTask<CPITask>("abandonedTask2", {task1});
+    auto task1 = TaskFactory::CreateTask<CPUTask>("task1");
+    auto abandonedTask1 = TaskFactory::CreateTask<CPUTask>("abandonedTask1", {task1});
+    auto abandonedTask2 = TaskFactory::CreateTask<CPUTask>("abandonedTask2", {task1});
 
     CPIGraph graph;
     graph.AddTask(abandonedTask1);

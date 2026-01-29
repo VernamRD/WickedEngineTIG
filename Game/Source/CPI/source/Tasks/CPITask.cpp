@@ -1,4 +1,4 @@
-#include "CPITask.h"
+#include "Tasks/CPITask.h"
 
 namespace Giperion
 {
@@ -29,6 +29,12 @@ namespace Giperion
         {
         }
 
+        CPITask::CPITask(std::string&& name, std::initializer_list<CPITaskHandle> prerequisites)
+            : m_name(std::move(name))
+            , m_prerequisites(prerequisites)
+        {
+        }
+
         CPITaskHandle CPITask::InitHandle(CPITaskPtr thisPtr) const
         {
             assert(thisPtr.get() == this);
@@ -36,10 +42,7 @@ namespace Giperion
             return handle;
         }
 
-        const wi::vector<CPITaskHandle>& CPITask::GetPrerequisites() const
-        {
-            return m_prerequisites;
-        }
+        const wi::vector<CPITaskHandle>& CPITask::GetPrerequisites() const { return m_prerequisites; }
 
     }  // namespace CPI
 }  // namespace Giperion

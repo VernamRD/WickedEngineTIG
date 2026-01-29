@@ -1,7 +1,7 @@
 #pragma once
 
-#include "CPITask.h"
 #include <WickedEngine.h>
+#include "Tasks/CPITaskFactory.h"
 
 namespace Giperion
 {
@@ -22,16 +22,8 @@ namespace Giperion
         bool IsInitialized();
         void Deinitialize();
         CPI& Get();
-
-        class CPUTask : public CPITask
-        {
-            
-        };
-
-        class GPUTask : public CPITask
-        {
-        };
-
+    
+        
         class CPIShader
         {
         public:

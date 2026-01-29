@@ -1,4 +1,7 @@
 #include "CPIGraph.h"
+
+#include "CPI.h"
+
 #include <iterator>
 #include <ranges>
 
@@ -8,7 +11,7 @@ namespace Giperion
     {
         CPIGraph::CPIGraph()
         {
-            auto rootTask = CPITask::CreateTask<CPITask>("Root");
+            auto rootTask = TaskFactory::CreateTask<CPITask>("Root");
             m_rootNode = wi::allocator::make_shared<CPIGraph_Node>(rootTask);
         }
 

@@ -38,38 +38,36 @@ namespace Giperion
             HandleType m_handle;
         };
 
+        enum class ETaskType : uint8_t
+        {
+            Undefined,
+            CPU,
+            GPU
+        };
+
         class CPITask
         {
+            friend class TaskFactory;
+
         public:
-            template <typename TaskType>
-                requires std::derived_from<TaskType, CPITask>
-            static CPITaskHandle CreateTask(std::string&& name)
-            {
-                auto task = std::shared_ptr<TaskType>(new TaskType(std::move(name)));
-                return task->InitHandle(task);
-            }
-
-            template <typename TaskType>
-                requires std::derived_from<TaskType, CPITask>
-            static CPITaskHandle CreateTask(std::string&& name, PrerequisitesType prerequisites)
-            {
-                auto task = std::shared_ptr<TaskType>(new TaskType(std::move(name), prerequisites));
-                return task->InitHandle(task);
-            }
-
-            CPITaskHandle InitHandle(CPITaskPtr thisPtr) const;
+            virtual ~CPITask() = default;
+            
             const PrerequisitesType& GetPrerequisites() const;
-            virtual void Execute() {}
-
             const std::string& GetName() const { return m_name; }
+            ETaskType GetTaskType() const { return m_taskType; }
 
-        private:
+        protected:
             CPITask() = delete;
             CPITask(std::string&& inName);
             CPITask(std::string&& inName, const wi::vector<CPITaskHandle>& prerequisites);
+            CPITask(std::string&& inName, std::initializer_list<CPITaskHandle> prerequisites);
 
+        private:
+            CPITaskHandle InitHandle(CPITaskPtr thisPtr) const;
+            
             std::string m_name;
             PrerequisitesType m_prerequisites;
+            ETaskType m_taskType = ETaskType::Undefined;
         };
 
     }  // namespace CPI
