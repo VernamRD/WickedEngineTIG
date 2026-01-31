@@ -389,3 +389,14 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/shaders
         PATTERN "hlsl6" EXCLUDE
         PATTERN "*.vcxitems*" EXCLUDE
         )
+
+if(WICKED_ENABLE_DAG)
+    add_subdirectory(DAG)
+
+    target_sources(WickedEngine_common
+        PRIVATE
+        $<TARGET_OBJECTS:DAGObject>
+    )
+
+    target_compile_definitions(WickedEngine_common PUBLIC WICKED_ENABLE_DAG)
+endif()
