@@ -1,6 +1,3 @@
-list(APPEND CMAKE_MODULE_PATH "${WICKED_ROOT_DIR}/cmake")
-include(ModuleHelpers)
-
 project(Game)
 
 set(GAME_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})

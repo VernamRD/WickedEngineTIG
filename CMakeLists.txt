@@ -15,16 +15,20 @@ if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     )
 endif()
 
+set(WICKED_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+list(APPEND CMAKE_MODULE_PATH "${WICKED_ROOT_DIR}/cmake")
+include(ModuleHelpers)
+
 project(WickedEngine)
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_supported)
 
-set(WICKED_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-
-
 option(WICKED_BUILD_DX12 "Build WickedEngine with DirectX 12 support (Windows only)" OFF)
 option(WICKED_BUILD_VULKAN "Build WickedEngine with Vulkan support" ON)
+
+option(WICKED_ENABLE_DAG "Enable DAG module" ON)
 
 option(WICKED_DYNAMIC_LIBRARY "Build WickedEngine as a dynamic library" OFF)
 option(WICKED_PIC "Build WickedEngine as position-independent code" WICKED_DYNAMIC_LIBRARY)
