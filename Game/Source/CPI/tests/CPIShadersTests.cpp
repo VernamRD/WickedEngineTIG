@@ -248,11 +248,13 @@ TEST_F(CPIShaderFixture, ComputeShaderWithReadback)
     fenceReadback->CPUWait();
 
     EXPECT_TRUE(fenceReadback->IsSignaled());
-
-    auto data = testShader.GetData();
+    
     for (int32_t i = 0; i < testShader.ELEMENT_COUNT; ++i)
     {
+        auto data = testShader.GetData();
         int3 val1 = data[i].Data;
-        EXPECT_EQ(val1, int3(1, 1, 1));
+        EXPECT_EQ(val1.x, 1);
+        EXPECT_EQ(val1.y, 1);
+        EXPECT_EQ(val1.z, 1);
     }
 }

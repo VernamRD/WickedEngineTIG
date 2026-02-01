@@ -61,6 +61,18 @@
             "configurePreset": "windows-msvc",
             "configuration": "Debug",
             "jobs": 0
+        },
+        {
+            "name": "linux-release",
+            "configurePreset": "linux-gcc-ninja",
+            "configuration": "Release",
+            "jobs": 0
+        },
+        {
+            "name": "linux-debug",
+            "configurePreset": "linux-gcc-ninja",
+            "configuration": "Debug",
+            "jobs": 0
         }
     ]
 }
