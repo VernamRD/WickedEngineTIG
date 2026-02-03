@@ -4,7 +4,13 @@ project(DAG)
 file(GLOB SOURCES
     source/*.cpp
     include/*.h
+    source/Tasks/*.h
+    source/Tasks/*.cpp
 )
+
+# if(BUILD_TESTING)
+#     add_subdirectory(tests)
+# endif()
 
 set(PROJECT_OBJECTS ${PROJECT_NAME}Objects)
 

@@ -1,107 +1,154 @@
 #include "DAG.h"
 
-namespace wi
+#include "Tasks/TaskFactory.h"
+
+#include "wiGraphicsDevice_Vulkan.h"
+
+#include <algorithm>
+#include <iterator>
+#include <ranges>
+
+namespace Giperion
 {
-    namespace compute
+    namespace Compute
     {
-
-#pragma region ComputeNode
-        ComputeNode::ComputeNode(const TaskDesc& desc)
-            : m_desc(desc)
+        DAG::DAG()
         {
+            auto rootTask = TaskFactory::CreateTask<Task>("Root");
+            m_rootNode = wi::allocator::make_shared<DAG_Node>(rootTask);
         }
 
-        void ComputeNode::AddDependency(ComputeNode* node)
+        void DAG::Initialize()
         {
-            if (node)
+            auto device_Vk = static_cast<wi::graphics::GraphicsDevice_Vulkan*>(wi::graphics::GetDevice());
+            auto device = device_Vk->GetDevice();
+            VkCommandPoolCreateInfo poolInfo{};
+            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            poolInfo.queueFamilyIndex = device_Vk->GetGraphicsFamilyIndex(); 
+            poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            
+            VkCommandPool primaryPool;
+            vkCreateCommandPool(device, &poolInfo, nullptr, &primaryPool);
+            
+            VkCommandPool secondaryPool;
+            vkCreateCommandPool(device, &poolInfo, nullptr, &secondaryPool);
+            
+            
+            
+            
+            // Create primary cmd pool and cmd
             {
-                m_dependencies.push_back(node);
-                node->m_dependents.push_back(this);
+                VkCommandBufferAllocateInfo allocInfo = {};
+                allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                allocInfo.commandPool = primaryPool;
+                allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                allocInfo.commandBufferCount = 1;
+            
+                VkCommandBuffer primaryCmd;
+                vkAllocateCommandBuffers(device, &allocInfo, &primaryCmd);    
+            }
+            
+            // Create secondary cmd pool and cmd
+            {
+                const uint32_t SECONDARY_COUNT = 64;
+            
+                VkCommandBufferAllocateInfo allocInfo = {};
+                allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                allocInfo.commandPool = secondaryPool;
+                allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+                allocInfo.commandBufferCount = SECONDARY_COUNT;
+                
+                VkCommandBuffer secondaryCmds[SECONDARY_COUNT];
+                vkAllocateCommandBuffers(device, &allocInfo, secondaryCmds);
             }
         }
 
-        bool ComputeNode::IsReady() const
+        bool DAG::AddTask(TaskHandle task)
         {
-            for (const ComputeNode* dependency : m_dependencies)
-            {
-                if (dependency->GetState() != NodeState::Completed)
-                {
-                    return false;
-                }
-            }
+            m_tasksToCompile.push_back(task);
+            MarkGraphDirty();
 
             return true;
         }
 
-        void ComputeNode::RecordCommands(wi::graphics::CommandList cmd)
+        bool DAG::Compile()
         {
-            if (m_desc.recordFunction)
+            if (m_state != EDAGState::MustBeRecompile && m_tasksToCompile.empty()) return true;
+
+            std::vector<DAGNodePtr> nodesWithPrerequisite;
+
+            TaskHandle task = m_tasksToCompile[m_tasksToCompile.size() - 1];
+
+            while (task.IsValid())
             {
-                m_desc.recordFunction(cmd);
+                DAGNodePtr newNode = wi::allocator::make_shared<DAG_Node>(task);
+                m_nodesByHandle.insert({task, newNode});
+
+                if (task.GetPrerequisites().empty())
+                {
+                    m_rootNode->m_nextNodes.push_back(newNode);
+                    newNode->m_prevNodes.push_back(m_rootNode);
+                }
+                else
+                {
+                    nodesWithPrerequisite.push_back(newNode);
+                }
+
+                m_tasksToCompile.pop_back();
+
+                if (m_tasksToCompile.empty()) break;
+                task = m_tasksToCompile[m_tasksToCompile.size() - 1];
             }
+
+            m_tasksToCompile.clear();
+
+            // Try resolve abondened tasks
+            if (m_abandonedTasks.size() > 0)
+            {
+                for (auto abandonedTask : m_abandonedTasks)
+                {
+                    auto nodePtr = m_nodesByHandle[abandonedTask];
+                    if (nodePtr.IsValid())
+                    {
+                        nodesWithPrerequisite.push_back(nodePtr);
+                    }
+                }
+
+                m_abandonedTasks.clear();
+            }
+
+            // Coonect prerequisite
+            for (auto nodeWithPrerequisite : nodesWithPrerequisite)
+            {
+                bool bAllPrerequisiteExist =
+                    std::ranges::all_of(nodeWithPrerequisite->GetTask().GetPrerequisites(),
+                        [this](const auto& key) { return m_nodesByHandle.contains(key); });
+
+                if (bAllPrerequisiteExist)
+                {
+                    for (auto prerequisiteTask : nodeWithPrerequisite->GetTask().GetPrerequisites())
+                    {
+                        auto parentNode = m_nodesByHandle[prerequisiteTask];
+                        parentNode->m_nextNodes.push_back(nodeWithPrerequisite);
+                        nodeWithPrerequisite->m_prevNodes.push_back(parentNode);
+                    }
+                }
+                // Defer the task for future compilations. Current requirements are unattainable.
+                else
+                {
+                    m_abandonedTasks.push_back(nodeWithPrerequisite->GetTask());
+                }
+            }
+
+            m_state = EDAGState::UpToDate;
+
+            return true;
         }
-#pragma endregion ComputeNode
 
-#pragma region SecondaryCommandBufferPool
-
-        SecondaryCommandBufferPool::SecondaryCommandBufferPool(wi::graphics::GraphicsDevice* device, uint32_t poolSize)
-            : m_device(device)
+        DAGNodeWeakPtr DAG::GetNode(TaskHandle handle)
         {
-            auto device_vk = static_cast<wi::graphics::GraphicsDevice_Vulkan*>(m_device);
-            m_pool.reserve(poolSize);
-
-            for (uint32_t i = 0; i < poolSize; ++i)
-            {
-                VkCommandPoolCreateInfo poolInfo = {};
-                poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-                poolInfo.queueFamilyIndex = device_vk->GetGraphicsFamilyIndex();
-            }            
+            return m_nodesByHandle.contains(handle) ? m_nodesByHandle[handle]
+                                                    : DAGNodeWeakPtr{};
         }
-
-        SecondaryCommandBufferPool::~SecondaryCommandBufferPool()
-        {
-            for (wi::graphics::CommandList& cmd : m_pool)
-            {
-                m_device->DestroyCommandList(cmd);
-            }
-        }
-
-        wi::graphics::CommandList SecondaryCommandBufferPool::Acquire()
-        {
-            if (m_available.empty())
-            {
-                wi::graphics::CommandList cmd = m_device->CreateCommandList(wi::graphics::QUEUE_COMPUTE, true);
-                m_pool.push_back(cmd);
-                return cmd;
-            }
-            else
-            {
-                wi::graphics::CommandList cmd = m_available.front();
-                m_available.pop();
-                m_inUse.push_back(cmd);
-                return cmd;
-            }
-        }
-
-        void SecondaryCommandBufferPool::Release(wi::graphics::CommandList cmd)
-        {
-            auto it = std::find(m_inUse.begin(), m_inUse.end(), cmd);
-            if (it != m_inUse.end())
-            {
-                m_inUse.erase(it);
-                m_available.push(cmd);
-            }
-        }
-
-        void SecondaryCommandBufferPool::Reset()
-        {
-            for (wi::graphics::CommandList& cmd : m_inUse)
-            {
-                m_available.push(cmd);
-            }
-            m_inUse.clear();
-        }
-        
-#pragma endregion SecondaryCommandBufferPool
-    }  // namespace compute
-}  // namespace wi
+    }  // namespace Compute
+}  // namespace Giperion

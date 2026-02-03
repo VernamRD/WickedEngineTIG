@@ -1,15 +1,15 @@
 #pragma once
 
-#include "CPITask.h"
+#include "Task.h"
 
 namespace Giperion
 {
-    namespace CPI
+    namespace Compute
     {
-        class CPUTask : public CPITask
+        class CPUTask : public Task
         {
         public:
-            using CPITask::CPITask;
+            using Task::Task;
 
             virtual void Initialize_CPU() {}
             virtual void Execute_CPU() {}
@@ -17,6 +17,6 @@ namespace Giperion
         private:
         };
 
-    }  // namespace CPI
+    }  // namespace DAG
 
 }  // namespace Giperion

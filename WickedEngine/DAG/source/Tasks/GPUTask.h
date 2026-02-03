@@ -1,16 +1,16 @@
 #pragma once
 
-#include "CPITask.h"
+#include "Task.h"
 #include <wiGraphicsDevice.h>
 
 namespace Giperion
 {
-    namespace CPI
+    namespace Compute
     {
-        class GPUTask : public CPITask
+        class GPUTask : public Task
         {
         public:
-            using CPITask::CPITask;
+            using Task::Task;
             
             virtual void Initialize_GPU(wi::graphics::GraphicsDevice* device, wi::graphics::CommandList cmd) {}
             virtual void Execute_GPU(wi::graphics::GraphicsDevice* device, wi::graphics::CommandList cmd) {}
@@ -18,6 +18,6 @@ namespace Giperion
         private:
         };
 
-    }  // namespace CPI
+    }  // namespace Compute
 
 }  // namespace Giperion

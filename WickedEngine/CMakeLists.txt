@@ -24,6 +24,9 @@ option(USE_TZCNT "Enable TZCNT" ON)
 option(USE_F16C "Enable F16C" ON)
 option(USE_FMADD "Enable FMADD" ON)
 
+# Enable testing
+option(BUILD_TESTING "Build the testing tree" ON)
+
 if (WICKED_DYNAMIC_LIBRARY)
     set(WICKED_LIBRARY_TYPE SHARED)
     message(STATUS "Building WickedEngine as a shared library")
@@ -399,4 +402,33 @@ if(WICKED_ENABLE_DAG)
     )
 
     target_compile_definitions(WickedEngine_common PUBLIC WICKED_ENABLE_DAG)
+endif()
+
+if(BUILD_TESTING)
+    # Connect GTest
+    if(NOT TARGET GTest::gtest_main)
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG v1.17.0
+        )
+    endif()
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${PROJECT_NAME} PRIVATE --coverage)
+        target_link_options(${PROJECT_NAME} PRIVATE --coverage)
+    endif()
+
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    enable_testing()
+
+    # Global test agregator
+    add_custom_target(AllGameTests)
+endif()
+
+if(BUILD_TESTING AND TARGET AllGameTests)
+    add_dependencies(WickedEngine_common AllGameTests)
 endif()

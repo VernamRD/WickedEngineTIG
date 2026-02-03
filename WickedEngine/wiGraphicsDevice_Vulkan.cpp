@@ -9843,6 +9843,10 @@ void GraphicsDevice_Vulkan::set_fence_name(VkFence fence, const char* name)
 	{
 		return graphicsFamily;
 	}
+    uint32_t GraphicsDevice_Vulkan::GetComputeFamilyIndex() const
+    {
+        return computeFamily;
+    }
 }
 
 #endif // WICKEDENGINE_BUILD_VULKAN

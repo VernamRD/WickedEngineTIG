@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <vector>
+#include <mutex>
 
 namespace wi::pool
 {
@@ -120,10 +122,10 @@ namespace wi::pool
             m_pooledItems.emplace_back(std::move(item));
         }
 
+        size_t m_initialSize;
         bool m_destroying;
         std::mutex m_mtx;
         std::vector<std::shared_ptr<value_type>> m_pooledItems;
         std::vector<std::weak_ptr<value_type>> m_inUseItems;
-        size_t m_initialSize;
     };
 }  // namespace wi::pool

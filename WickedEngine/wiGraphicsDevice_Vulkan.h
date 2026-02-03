@@ -130,7 +130,7 @@ namespace wi::graphics
         VkFence m_fence = VK_NULL_HANDLE;
         VkFencePool* m_pool = nullptr;
     };
-
+    
     struct VkFencePool : public wi::pool::Pool<GPUFence_VK>
     {
     public:
@@ -625,6 +625,7 @@ namespace wi::graphics
 		VkInstance GetInstance();
 		VkQueue GetGraphicsCommandQueue();
 		uint32_t GetGraphicsFamilyIndex();
+		uint32_t GetComputeFamilyIndex() const;
 
 		struct AllocationHandler
 		{
