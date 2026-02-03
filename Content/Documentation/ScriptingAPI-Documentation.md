@@ -1908,8 +1908,8 @@ Tonemap = {
 It is a RenderPath2D but one that internally manages resource loading and can display information about the process.
 It inherits functions from RenderPath2D.
 - [constructor]LoadingScreen()
-- AddLoadModelTask(string fileName, opt Matrix matrix) : Entity -- Adds a scene loading task into the global scene and returns the root entity handle immediately. The loading task will be started asynchronously when the LoadingScreen is activated by the Application.
-- AddLoadModelTask(Scene scene, string fileName, opt Matrix matrix) : Entity -- Adds a scene loading task into the specified scene and returns the root entity handle immediately. The loading task will be started asynchronously when the LoadingScreen is activated by the Application.
+- AddLoadModelTask(string fileName, opt Matrix matrix) : Entity -- Adds a scene loading node into the global scene and returns the root entity handle immediately. The loading node will be started asynchronously when the LoadingScreen is activated by the Application.
+- AddLoadModelTask(Scene scene, string fileName, opt Matrix matrix) : Entity -- Adds a scene loading node into the specified scene and returns the root entity handle immediately. The loading node will be started asynchronously when the LoadingScreen is activated by the Application.
 - AddRenderPathActivationTask(RenderPath path, opt float fadeSeconds = 0, opt int fadeR = 0,fadeG = 0,fadeB = 0, opt FadeType fadetype = FadeType.FadeToColor) -- loads resources of a RenderPath and activates it after all loading tasks have finished
 - IsFinished() : bool -- returns true when all loading tasks have finished
 - GetProgress() : int -- returns percentage of loading complete (0% - 100%)

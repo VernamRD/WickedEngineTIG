@@ -16169,7 +16169,7 @@ static void ImGui::DockNodeUpdateTabBar(ImGuiDockNode* node, ImGuiWindow* host_w
             node->LastFrameFocused = g.FrameCount;
         if (node->VisibleWindow)
         {
-            // Notify root of visible window (used to display title in OS task bar)
+            // Notify root of visible window (used to display title in OS node bar)
             if (is_focused || root_node->VisibleWindow == NULL)
                 root_node->VisibleWindow = node->VisibleWindow;
             if (node->TabBar)
@@ -16326,7 +16326,7 @@ static void ImGui::DockNodeUpdateTabBar(ImGuiDockNode* node, ImGuiWindow* host_w
     for (int color_n = 0; color_n < ImGuiWindowDockStyleCol_COUNT; color_n++)
         g.Style.Colors[GWindowDockStyleColors[color_n]] = backup_style_cols[color_n];
 
-    // Notify root of visible window (used to display title in OS task bar)
+    // Notify root of visible window (used to display title in OS node bar)
     if (node->VisibleWindow)
         if (is_focused || root_node->VisibleWindow == NULL)
             root_node->VisibleWindow = node->VisibleWindow;

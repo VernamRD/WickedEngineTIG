@@ -30,7 +30,7 @@ namespace wi
 			Stretch	// fill the whole screen, and stretch the image if needed
 		} background_mode = BackgroundMode::Fill;
 
-		//Add a loading task which should be executed
+		//Add a loading node which should be executed
 		void addLoadingFunction(const std::function<void(wi::jobsystem::JobArgs)>& loadingFunction);
 		//Helper for loading a whole renderable component
 		void addLoadingComponent(RenderPath* component, Application* main, float fadeSeconds = 0, wi::Color fadeColor = wi::Color(0, 0, 0, 255), wi::FadeManager::FadeType fadetype = wi::FadeManager::FadeType::FadeToColor);

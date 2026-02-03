@@ -1430,7 +1430,7 @@ inline message::message(std::string const &title,
 
     full_message += ' ' + title + "\n\n" + text;
 
-    // This does not really start an async task; it just passes the
+    // This does not really start an async node; it just passes the
     // EM_ASM_INT return value to a fake start() function.
     m_async->start(EM_ASM_INT(
     {

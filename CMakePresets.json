@@ -1,0 +1,78 @@
+{
+    "version": 4,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "n_cc",
+            "displayName": "Generate Ninja compile commands",
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "Boost_INCLUDE_DIR": "$env{VCPKG_ROOT}/installed/x64-windows/include"
+            }
+        },
+        {
+            "name": "windows-msvc",
+            "inherits": "base",
+            "generator": "Visual Studio 17 2022",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "OFF",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase"
+            }
+        },
+        {
+            "name": "linux-gcc-ninja",
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "win64-release",
+            "configurePreset": "windows-msvc",
+            "configuration": "Release",
+            "jobs": 0
+        },
+        {
+            "name": "win64-debug",
+            "configurePreset": "windows-msvc",
+            "configuration": "Debug",
+            "jobs": 0
+        },
+        {
+            "name": "linux-release",
+            "configurePreset": "linux-gcc-ninja",
+            "configuration": "Release",
+            "jobs": 0
+        },
+        {
+            "name": "linux-debug",
+            "configurePreset": "linux-gcc-ninja",
+            "configuration": "Debug",
+            "jobs": 0
+        }
+    ]
+}

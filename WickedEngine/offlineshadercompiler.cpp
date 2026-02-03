@@ -670,7 +670,7 @@ int main(int argc, char* argv[])
 
 					if (input.minshadermodel > ShaderModel::SM_5_0 && target.format == ShaderFormat::HLSL5)
 					{
-						// if shader format cannot support shader model, then we cancel the task without returning error
+						// if shader format cannot support shader model, then we cancel the node without returning error
 						return;
 					}
 					if (target.format == ShaderFormat::PS5 && (input.minshadermodel >= ShaderModel::SM_6_5 || input.stage == ShaderStage::MS || input.stage == ShaderStage::AS))

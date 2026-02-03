@@ -33,7 +33,7 @@ local component = main.GetActivePath();
 component.AddSprite(sprite);
 
 
--- Start a background task to rotate the model and update the sprite:
+-- Start a background node to rotate the model and update the sprite:
 runProcess(function()
 	local velocity = Vector((math.random() * 2 - 1) * 4, (math.random() * 2 - 1) * 4); -- starting velocity for our sprite
 	local screenW = GetScreenWidth();

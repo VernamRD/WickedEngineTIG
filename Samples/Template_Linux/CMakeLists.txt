@@ -42,5 +42,5 @@ message("libdxcompiler found at ${LIBDXCOMPILER_PATH}")
 
 add_custom_command(
     TARGET Template_Linux POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBDXCOMPILER_PATH} ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBDXCOMPILER_PATH} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
 )

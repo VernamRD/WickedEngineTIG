@@ -533,7 +533,7 @@ enum DxcCursorKind {
   DxcCursor_OMPParallelForDirective = 238, // OpenMP parallel for directive.
   DxcCursor_OMPParallelSectionsDirective =
       239,                               // OpenMP parallel sections directive.
-  DxcCursor_OMPTaskDirective = 240,      // OpenMP task directive.
+  DxcCursor_OMPTaskDirective = 240,      // OpenMP node directive.
   DxcCursor_OMPMasterDirective = 241,    // OpenMP master directive.
   DxcCursor_OMPCriticalDirective = 242,  // OpenMP critical directive.
   DxcCursor_OMPTaskyieldDirective = 243, // OpenMP taskyield directive.

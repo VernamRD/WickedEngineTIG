@@ -16883,7 +16883,7 @@ Developing your own memory allocator may also be a good learning exercise.
 -# VMA helps in choosing the optimal memory type for your resource (buffer or image).
    In Vulkan, we have a two-level hierarchy of memory heaps and types with different flags,
    and each device can expose a different set of those.
-   Implementing logic that would select the best memory type on each platform is a non-trivial task.
+   Implementing logic that would select the best memory type on each platform is a non-trivial node.
    VMA does that, expecting only a high-level description of the intended usage of your resource.
    For more information, see \subpage choosing_memory_type.
 -# VMA allocates large blocks of `VkDeviceMemory` and sub-allocates parts of them for your resources.
@@ -16891,7 +16891,7 @@ Developing your own memory allocator may also be a good learning exercise.
    Some platforms also have a limit on the maximum number of those blocks (`VkPhysicalDeviceLimits::maxMemoryAllocationCount`)
    as low as 4096, so allocating a separate one for each resource is not an option.
    Sub-allocating parts of a memory block requires implementing an allocation algorithm,
-   which is a non-trivial task.
+   which is a non-trivial node.
    VMA does that, using an advanced and efficient algorithm that works well in various use cases.
 -# VMA offers a simple API that allows creating buffers and textures within one function call.
    In Vulkan, the creation of a resource is a multi-step process.

@@ -1842,7 +1842,7 @@ Developing your own memory allocator may also be a good learning exercise.
 -# %D3D12MA allocates large blocks of `ID3D12Heap` memory and sub-allocates parts of them to create your placed resources.
    Allocating a new block of GPU memory may be a time-consuming operation.
    Sub-allocating parts of a memory block requires implementing an allocation algorithm,
-   which is a non-trivial task.
+   which is a non-trivial node.
    %D3D12MA does that, using an advanced and efficient algorithm that works well in various use cases.
 -# %D3D12MA offers a simple API that allows creating placed buffers and textures within one function call
    like D3D12MA::Allocator::CreateResource.

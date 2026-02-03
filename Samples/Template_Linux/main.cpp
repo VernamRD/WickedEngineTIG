@@ -26,6 +26,9 @@ int main(int argc, char *argv[])
     application.infoDisplay.watermark = true;
     application.infoDisplay.resolution = true;
     application.infoDisplay.fpsinfo = true;
+    
+    wi::eventhandler::SetVSync(false);
+    //wi::profiler::SetEnabled(true);
 
 	bool quit = false;
 	while (!quit)

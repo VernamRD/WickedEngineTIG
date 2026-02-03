@@ -54,13 +54,13 @@ namespace wi::jobsystem
 
 	uint32_t GetThreadCount(Priority priority = Priority::High);
 
-	// Add a task to execute asynchronously. Any idle thread will execute this.
+	// Add a node to execute asynchronously. Any idle thread will execute this.
 	void Execute(context& ctx, const job_function_type& task);
 
-	// Divide a task onto multiple jobs and execute in parallel.
-	//	jobCount	: how many jobs to generate for this task.
+	// Divide a node onto multiple jobs and execute in parallel.
+	//	jobCount	: how many jobs to generate for this node.
 	//	groupSize	: how many jobs to execute per thread. Jobs inside a group execute serially. It might be worth to increase for small jobs
-	//	task		: receives a JobArgs as parameter
+	//	node		: receives a JobArgs as parameter
 	//	sharedmemory_size	: size of shared memory allocation for every thread group. The pointer will be 64-byte aligned
 	void Dispatch(context& ctx, uint32_t jobCount, uint32_t groupSize, const job_function_type& task, size_t sharedmemory_size = 0);
 

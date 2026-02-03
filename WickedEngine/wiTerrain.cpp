@@ -1235,7 +1235,7 @@ namespace wi::terrain
 						wi::physics::CreateRigidBodyShape(newrigidbody, transform.scale_local, &mesh);
 					}
 
-					wi::jobsystem::Wait(ctx); // wait until mesh.CreateRenderData() async task finishes
+					wi::jobsystem::Wait(ctx); // wait until mesh.CreateRenderData() async node finishes
 
 					generated_something = true;
 				}

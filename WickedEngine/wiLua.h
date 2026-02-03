@@ -50,7 +50,7 @@ namespace wi::lua
 	void Signal(const char* name);
 	inline void Signal(const std::string& name) { Signal(name.c_str()); }
 
-	//kill every running background task (coroutine)
+	//kill every running background node (coroutine)
 	void KillProcesses();
 
 	// Generates a unique identifier for a script instance:

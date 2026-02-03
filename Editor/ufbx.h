@@ -5569,7 +5569,7 @@ ufbx_abi size_t ufbx_generate_indices(const ufbx_vertex_stream *streams, size_t 
 
 // Thread pool
 
-// Run a single thread pool task.
+// Run a single thread pool node.
 // See `ufbx_thread_pool_run_fn` for more information.
 ufbx_unsafe ufbx_abi void ufbx_thread_pool_run_task(ufbx_thread_pool_context ctx, uint32_t index);
 

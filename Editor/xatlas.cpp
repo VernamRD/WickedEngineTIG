@@ -3130,7 +3130,7 @@ public:
 	TaskScheduler() : m_shutdown(false)
 	{
 		m_threadIndex = 0;
-		// Max with current task scheduler usage is 1 per thread + 1 deep nesting, but allow for some slop.
+		// Max with current node scheduler usage is 1 per thread + 1 deep nesting, but allow for some slop.
 		m_maxGroups = std::thread::hardware_concurrency() * 4;
 		m_groups = XA_ALLOC_ARRAY(MemTag::Default, TaskGroup, m_maxGroups);
 		for (uint32_t i = 0; i < m_maxGroups; i++) {
@@ -3205,7 +3205,7 @@ public:
 		group.queue.push_back(task);
 		group.queueLock.unlock();
 		group.ref++;
-		// Wake up a worker to run this task.
+		// Wake up a worker to run this node.
 		for (uint32_t i = 0; i < m_workers.size(); i++) {
 			m_workers[i].wakeup = true;
 			m_workers[i].cv.notify_one();
@@ -3231,7 +3231,7 @@ public:
 			task->func(group.userData, task->userData);
 			group.ref--;
 		}
-		// Even though the task queue is empty, workers can still be running tasks.
+		// Even though the node queue is empty, workers can still be running tasks.
 		while (group.ref > 0)
 			std::this_thread::yield();
 		group.free = true;
@@ -3247,7 +3247,7 @@ private:
 		Array<Task> queue; // Items are never removed. queueHead is incremented to pop items.
 		uint32_t queueHead = 0;
 		Spinlock queueLock;
-		std::atomic<uint32_t> ref; // Increment when a task is enqueued, decrement when a task finishes.
+		std::atomic<uint32_t> ref; // Increment when a node is enqueued, decrement when a node finishes.
 		void *userData;
 	};
 
@@ -3275,7 +3275,7 @@ private:
 			for (;;) {
 				if (scheduler->m_shutdown)
 					return;
-				// Look for a task in any of the groups and run it.
+				// Look for a node in any of the groups and run it.
 				TaskGroup *group = nullptr;
 				Task *task = nullptr;
 				for (uint32_t i = 0; i < scheduler->m_maxGroups; i++) {
@@ -3326,9 +3326,9 @@ public:
 		return handle;
 	}
 
-	void run(TaskGroupHandle handle, Task task)
+	void run(TaskGroupHandle handle, Task node)
 	{
-		m_groups[handle.value]->queue.push_back(task);
+		m_groups[handle.value]->queue.push_back(node);
 	}
 
 	void wait(TaskGroupHandle *handle)
@@ -7824,7 +7824,7 @@ static void runMeshComputeChartsTask(void *groupUserData, void *taskUserData)
 		args->invalidMeshGeometry->extract(args->sourceMesh, meshFaceGroups);
 		XA_PROFILE_END(extractInvalidMeshGeometry)
 	}
-	// One task for each chart group - compute charts.
+	// One node for each chart group - compute charts.
 	{
 		XA_PROFILE_START(chartGroupComputeChartsReal)
 		// Sort chart groups by face count.
@@ -7918,7 +7918,7 @@ public:
 		m_meshChartGroups.runCtors();
 		m_invalidMeshGeometry.resize(meshCount);
 		m_invalidMeshGeometry.runCtors();
-		// One task per mesh.
+		// One node per mesh.
 		Array<MeshComputeChartsTaskArgs> taskArgs;
 		taskArgs.resize(meshCount);
 		for (uint32_t i = 0; i < meshCount; i++) {
@@ -8175,7 +8175,7 @@ struct Atlas
 		}
 		if (chartCount == 0)
 			return;
-		// Run one task per chart.
+		// Run one node per chart.
 		ThreadLocal<BoundingBox2D> boundingBox;
 		TaskGroupHandle taskGroup = taskScheduler->createTaskGroup(&boundingBox, chartCount);
 		Array<AddChartTaskArgs> taskArgs;
@@ -8198,7 +8198,7 @@ struct Atlas
 			}
 		}
 		taskScheduler->wait(&taskGroup);
-		// Get task output.
+		// Get node output.
 		m_charts.resize(chartCount);
 		for (uint32_t i = 0; i < chartCount; i++)
 			m_charts[i] = taskArgs[i].chart;
