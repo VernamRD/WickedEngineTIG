@@ -36,7 +36,10 @@
 #include <algorithm>
 #include <atomic>
 #include <mutex>
+
+#ifdef _WIN32
 #include <malloc.h> // alloca
+#endif // _WIN32
 
 using namespace wi::primitive;
 using namespace wi::graphics;
@@ -368,6 +371,9 @@ wi::jobsystem::context object_pso_job_ctx;
 PipelineState PSO_object_wire;
 PipelineState PSO_object_wire_tessellation;
 PipelineState PSO_object_wire_mesh_shader;
+PipelineState PSO_object_wire_doublesided;
+PipelineState PSO_object_wire_tessellation_doublesided;
+PipelineState PSO_object_wire_mesh_shader_doublesided;
 
 wi::jobsystem::context raytracing_ctx;
 wi::jobsystem::context objectps_ctx;
@@ -462,14 +468,7 @@ SHADERTYPE GetVSTYPE(RENDERPASS renderPass, bool tessellation, bool alphatest, b
 	case RENDERPASS_PREPASS_DEPTHONLY:
 		if (tessellation)
 		{
-			if (alphatest)
-			{
-				realVS = VSTYPE_OBJECT_PREPASS_ALPHATEST_TESSELLATION;
-			}
-			else
-			{
-				realVS = VSTYPE_OBJECT_PREPASS_TESSELLATION;
-			}
+			realVS = VSTYPE_OBJECT_PREPASS_TESSELLATION;
 		}
 		else
 		{
@@ -541,15 +540,7 @@ SHADERTYPE GetHSTYPE(RENDERPASS renderPass, bool tessellation, bool alphatest)
 		{
 		case RENDERPASS_PREPASS:
 		case RENDERPASS_PREPASS_DEPTHONLY:
-			if (alphatest)
-			{
-				return HSTYPE_OBJECT_PREPASS_ALPHATEST;
-			}
-			else
-			{
-				return HSTYPE_OBJECT_PREPASS;
-			}
-			break;
+			return HSTYPE_OBJECT_PREPASS;
 		case RENDERPASS_MAIN:
 			return HSTYPE_OBJECT;
 			break;
@@ -568,14 +559,7 @@ SHADERTYPE GetDSTYPE(RENDERPASS renderPass, bool tessellation, bool alphatest)
 		{
 		case RENDERPASS_PREPASS:
 		case RENDERPASS_PREPASS_DEPTHONLY:
-			if (alphatest)
-			{
-				return DSTYPE_OBJECT_PREPASS_ALPHATEST;
-			}
-			else
-			{
-				return DSTYPE_OBJECT_PREPASS;
-			}
+			return DSTYPE_OBJECT_PREPASS;
 		case RENDERPASS_MAIN:
 			return DSTYPE_OBJECT;
 		default:
@@ -585,7 +569,7 @@ SHADERTYPE GetDSTYPE(RENDERPASS renderPass, bool tessellation, bool alphatest)
 
 	return SHADERTYPE_COUNT;
 }
-SHADERTYPE GetPSTYPE(RENDERPASS renderPass, bool alphatest, bool transparent, MaterialComponent::SHADERTYPE shaderType)
+SHADERTYPE GetPSTYPE(RENDERPASS renderPass, bool tessellation, bool alphatest, bool transparent, MaterialComponent::SHADERTYPE shaderType)
 {
 	SHADERTYPE realPS = SHADERTYPE_COUNT;
 
@@ -900,7 +884,6 @@ void LoadShaders()
 
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_OBJECT_COMMON_TESSELLATION], "objectVS_common_tessellation.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_OBJECT_PREPASS_TESSELLATION], "objectVS_prepass_tessellation.cso"); });
-	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_OBJECT_PREPASS_ALPHATEST_TESSELLATION], "objectVS_prepass_alphatest_tessellation.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_OBJECT_SIMPLE_TESSELLATION], "objectVS_simple_tessellation.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_IMPOSTOR], "impostorVS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::VS, shaders[VSTYPE_VOLUMETRICLIGHT_DIRECTIONAL], "volumetriclight_directionalVS.cso"); });
@@ -1190,12 +1173,10 @@ void LoadShaders()
 
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT], "objectHS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT_PREPASS], "objectHS_prepass.cso"); });
-	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT_PREPASS_ALPHATEST], "objectHS_prepass_alphatest.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::HS, shaders[HSTYPE_OBJECT_SIMPLE], "objectHS_simple.cso"); });
 
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::DS, shaders[DSTYPE_OBJECT], "objectDS.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::DS, shaders[DSTYPE_OBJECT_PREPASS], "objectDS_prepass.cso"); });
-	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::DS, shaders[DSTYPE_OBJECT_PREPASS_ALPHATEST], "objectDS_prepass_alphatest.cso"); });
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::DS, shaders[DSTYPE_OBJECT_SIMPLE], "objectDS_simple.cso"); });
 
 	wi::jobsystem::Dispatch(objectps_ctx, MaterialComponent::SHADERTYPE_COUNT, 1, [](wi::jobsystem::JobArgs args) {
@@ -1246,6 +1227,9 @@ void LoadShaders()
 			desc.dss = &depthStencils[DSSTYPE_DEFAULT];
 			desc.pt = PrimitiveTopology::TRIANGLELIST;
 			device->CreatePipelineState(&desc, &PSO_object_wire_mesh_shader);
+
+			desc.rs = &rasterizers[RSTYPE_WIRE_DOUBLESIDED];
+			device->CreatePipelineState(&desc, &PSO_object_wire_mesh_shader_doublesided);
 		});
 
 		wi::jobsystem::Execute(mesh_shader_ctx, [](wi::jobsystem::JobArgs args) { LoadShader(ShaderStage::MS, shaders[MSTYPE_OBJECT], "objectMS.cso"); });
@@ -1305,11 +1289,18 @@ void LoadShaders()
 
 		device->CreatePipelineState(&desc, &PSO_object_wire);
 
+		desc.rs = &rasterizers[RSTYPE_WIRE_DOUBLESIDED];
+		device->CreatePipelineState(&desc, &PSO_object_wire_doublesided);
+
 		desc.pt = PrimitiveTopology::PATCHLIST;
+		desc.rs = &rasterizers[RSTYPE_WIRE];
 		desc.vs = &shaders[VSTYPE_OBJECT_SIMPLE_TESSELLATION];
 		desc.hs = &shaders[HSTYPE_OBJECT_SIMPLE];
 		desc.ds = &shaders[DSTYPE_OBJECT_SIMPLE];
 		device->CreatePipelineState(&desc, &PSO_object_wire_tessellation);
+
+		desc.rs = &rasterizers[RSTYPE_WIRE_DOUBLESIDED];
+		device->CreatePipelineState(&desc, &PSO_object_wire_tessellation_doublesided);
 		});
 	wi::jobsystem::Execute(ctx, [](wi::jobsystem::JobArgs args) {
 		PipelineStateDesc desc;
@@ -1932,7 +1923,14 @@ void LoadShaders()
 										desc.gs = realGS < SHADERTYPE_COUNT ? &shaders[realGS] : nullptr;
 									}
 
-									SHADERTYPE realPS = GetPSTYPE((RENDERPASS)renderPass, alphatest, transparency, (MaterialComponent::SHADERTYPE)shaderType);
+									SHADERTYPE realPS = GetPSTYPE((RENDERPASS)renderPass, tessellation, alphatest, transparency, (MaterialComponent::SHADERTYPE)shaderType);
+#ifdef __APPLE__
+									if (mesh_shader && realPS == SHADERTYPE_COUNT)
+									{
+										// Apple Metal workaround: mesh shader must have pixel shader
+										realPS = PSTYPE_OBJECT_DEBUG;
+									}
+#endif // __APPLE__
 									desc.ps = realPS < SHADERTYPE_COUNT ? &shaders[realPS] : nullptr;
 
 									switch (blendMode)
@@ -2079,7 +2077,7 @@ void LoadShaders()
 											renderpass_info.rt_formats[0] = renderPass == RENDERPASS_MAIN ? format_rendertarget_main : format_idbuffer;
 										}
 										renderpass_info.ds_format = format_depthbuffer_main;
-										const uint32_t msaa_support[] = { 1,2,4,8 };
+										constexpr uint32_t msaa_support[] = { 1,2,4,8 };
 										for (uint32_t msaa : msaa_support)
 										{
 											variant.bits.sample_count = msaa;
@@ -2099,7 +2097,12 @@ void LoadShaders()
 										renderpass_info.rt_count = 1;
 										renderpass_info.rt_formats[0] = format_rendertarget_envprobe;
 										renderpass_info.ds_format = format_depthbuffer_envprobe;
-										const uint32_t msaa_support[] = { 1,8 };
+#ifdef __APPLE__
+										// Note: Apple doesn't necessarily support all MSAA smaple counts, so try to create for all possible ones:
+										constexpr uint32_t msaa_support[] = { 1,2,4,8 };
+#else
+										constexpr uint32_t msaa_support[] = { 1,EnvironmentProbeComponent::envmapMSAASampleCount };
+#endif // __APPLE__
 										for (uint32_t msaa : msaa_support)
 										{
 											variant.bits.sample_count = msaa;
@@ -2130,7 +2133,8 @@ void LoadShaders()
 									case RENDERPASS_RAINBLOCKER:
 									{
 										RenderPassInfo renderpass_info;
-										renderpass_info.rt_count = 0;
+										renderpass_info.rt_count = 1;
+										renderpass_info.rt_formats[0] = format_rendertarget_shadowmap; // Note: crash on Apple when rendertarget format is not set while renderpass has rendertarget (even though we do't use pixel shader for these)
 										renderpass_info.ds_format = format_depthbuffer_shadowmap;
 										PipelineState pso;
 										device->CreatePipelineState(&desc, &pso, &renderpass_info);
@@ -3215,18 +3219,20 @@ void RenderMeshes(
 
 		const float tessF = mesh.GetTessellationFactor();
 		const bool tessellatorRequested = tessF > 0 && tessellation;
-		const bool meshShaderRequested = !tessellatorRequested && mesh_shader && mesh.vb_clu.IsValid();
+		const bool meshShaderRequested = !tessellatorRequested && mesh_shader && mesh.vb_clu.IsValid() && !wireframe;
 
 		// Notes on provoking index buffer:
 		//	Normally it's used for primitiveID generation, so it would be only used in PREPASS
 		//	PREPASS_DEPTHONLY doesn't use separate shader variants, so it will also use provoking index buffer
 		//	RENDERPASS_MAIN requires it to fix depth mismatch only on Intel GPU between prepass and color passes
+		//	RENDERPASS_VOXELIZE only needs it because it uses common layout, currently it's easier to fix here
 		//	tessellation requires it to match same primitive order between prepass and color pass to have exact same tessellation
 		const bool provokingIBRequired =
 			!wireframe && (
 				renderPass == RENDERPASS_PREPASS ||
 				renderPass == RENDERPASS_PREPASS_DEPTHONLY ||
 				renderPass == RENDERPASS_MAIN ||
+				renderPass == RENDERPASS_VOXELIZE ||
 				tessellatorRequested
 			);
 
@@ -3287,15 +3293,25 @@ void RenderMeshes(
 					switch (renderPass)
 					{
 					case RENDERPASS_MAIN:
+					{
+						const bool doublesided = mesh.IsDoubleSided() || material.IsDoubleSided();
 						if (meshShaderRequested)
 						{
-							pso = &PSO_object_wire_mesh_shader;
+							pso = doublesided ? &PSO_object_wire_mesh_shader_doublesided : &PSO_object_wire_mesh_shader;
 						}
 						else
 						{
-							pso = tessellatorRequested ? &PSO_object_wire_tessellation : &PSO_object_wire;
+							if (tessellatorRequested)
+							{
+								pso = doublesided ? &PSO_object_wire_tessellation_doublesided : &PSO_object_wire_tessellation;
+							}
+							else
+							{
+								pso = doublesided ? &PSO_object_wire_doublesided : &PSO_object_wire;
+							}
 						}
-						break;
+					}
+					break;
 					default:
 						break;
 					}
@@ -3372,6 +3388,7 @@ void RenderMeshes(
 			push.instance_offset = (uint)instancedBatch.dataOffset;
 			assert(material.cached_wrapSampler >= 0 && material.cached_wrapSampler < 256);
 			assert(material.cached_clampSampler >= 0 && material.cached_clampSampler < 256);
+			static_assert(BINDLESS_SAMPLER_CAPACITY <= 256); // It is assumed for this structure that samplers can be indexed with 8 bits
 			push.wrapSamplerIndex = material.cached_wrapSampler;
 			push.clampSamplerIndex = material.cached_clampSampler;
 
@@ -4092,7 +4109,6 @@ void UpdateVisibility(Visibility& vis)
 						desc.format = format_depthbuffer_shadowmap;
 						desc.bind_flags = BindFlag::DEPTH_STENCIL | BindFlag::SHADER_RESOURCE;
 						desc.layout = ResourceState::SHADER_RESOURCE;
-						desc.misc_flags = ResourceMiscFlag::TEXTURE_COMPATIBLE_COMPRESSION;
 						device->CreateTexture(&desc, nullptr, &shadowMapAtlas);
 						device->SetName(&shadowMapAtlas, "shadowMapAtlas");
 
@@ -4105,7 +4121,6 @@ void UpdateVisibility(Visibility& vis)
 						desc.clear.color[3] = 0;
 						device->CreateTexture(&desc, nullptr, &shadowMapAtlas_Transparent);
 						device->SetName(&shadowMapAtlas_Transparent, "shadowMapAtlas_Transparent");
-
 					}
 
 					break;
@@ -5244,7 +5259,7 @@ void UpdateRenderData(
 				mesh.streamoutBuffer.IsValid()
 				)
 			{
-				SkinningPushConstants push;
+				SkinningPushConstants push = {};
 				push.vb_pos_wind = mesh.vb_pos_wind.descriptor_srv;
 				push.vb_nor = mesh.vb_nor.descriptor_srv;
 				push.vb_tan = mesh.vb_tan.descriptor_srv;
@@ -5982,13 +5997,16 @@ void DrawSoftParticles(
 	CommandList cmd
 )
 {
+	size_t emitterCount = vis.visibleEmitters.size();
+	if (emitterCount == 0 && vis.scene->weather.rain_amount == 0)
+		return;
+	
 	auto range = distortion ?
 		wi::profiler::BeginRangeGPU("EmittedParticles - Render (Distortion)", cmd) :
 		wi::profiler::BeginRangeGPU("EmittedParticles - Render", cmd);
 
 	BindCommonResources(cmd);
 
-	size_t emitterCount = vis.visibleEmitters.size();
 	if (emitterCount > 0)
 	{
 		// Sort emitters based on distance:
@@ -6723,7 +6741,7 @@ void DrawShadowmaps(
 				break;
 
 			Viewport* viewports = (Viewport*)alloca(sizeof(Viewport) * cascade_count);
-			Rect* scissors = (Rect*)alloca(sizeof(Rect) * cascade_count);
+			wi::graphics::Rect* scissors = (wi::graphics::Rect*)alloca(sizeof(wi::graphics::Rect) * cascade_count);
 			SHCAM* shcams = (SHCAM*)alloca(sizeof(SHCAM) * cascade_count);
 			CreateDirLightShadowCams(light, *vis.camera, shcams, cascade_count, shadow_rect, vis.scene->character_dedicated_shadows.data(), vis.scene->character_dedicated_shadows.size());
 
@@ -6828,7 +6846,7 @@ void DrawShadowmaps(
 					vp.height = float(shadow_rect.h);
 					device->BindViewports(1, &vp, cmd);
 
-					Rect scissor;
+					wi::graphics::Rect scissor;
 					scissor.from_viewport(vp);
 					device->BindScissorRects(1, &scissor, cmd);
 
@@ -6921,7 +6939,7 @@ void DrawShadowmaps(
 				vp.height = float(shadow_rect.h);
 				device->BindViewports(1, &vp, cmd);
 
-				Rect scissor;
+				wi::graphics::Rect scissor;
 				scissor.from_viewport(vp);
 				device->BindScissorRects(1, &scissor, cmd);
 
@@ -6945,7 +6963,7 @@ void DrawShadowmaps(
 				vp.height = float(shadow_rect.h);
 				device->BindViewports(1, &vp, cmd);
 
-				Rect scissor;
+				wi::graphics::Rect scissor;
 				scissor.from_viewport(vp);
 				device->BindScissorRects(1, &scissor, cmd);
 
@@ -6981,7 +6999,7 @@ void DrawShadowmaps(
 			SHCAM cameras[6];
 			CreateCubemapCameras(light.position, zNearP, zFarP, cameras, arraysize(cameras));
 			Viewport vp[arraysize(cameras)];
-			Rect scissors[arraysize(cameras)];
+			wi::graphics::Rect scissors[arraysize(cameras)];
 			Frustum frusta[arraysize(cameras)];
 			uint32_t camera_count = 0;
 
@@ -7096,7 +7114,7 @@ void DrawShadowmaps(
 					vp.height = float(shadow_rect.h);
 					device->BindViewports(1, &vp, cmd);
 
-					Rect scissor;
+					wi::graphics::Rect scissor;
 					scissor.from_viewport(vp);
 					device->BindScissorRects(1, &scissor, cmd);
 
@@ -7175,7 +7193,7 @@ void DrawShadowmaps(
 			device->BindDynamicConstantBuffer(cb, CBSLOT_RENDERER_CAMERA, cmd);
 			device->BindViewports(1, &vp, cmd);
 
-			Rect scissor;
+			wi::graphics::Rect scissor;
 			scissor.from_viewport(vp);
 			device->BindScissorRects(1, &scissor, cmd);
 
@@ -8976,6 +8994,8 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 	device->EventBegin("EnvironmentProbe Refresh", cmd);
 	auto range = wi::profiler::BeginRangeGPU("Environment Probe Refresh", cmd);
 
+	device->Barrier(GPUBarrier::Memory(), cmd); // safety
+
 	BindCommonResources(cmd);
 
 	const float zNearP = vis.camera->zNearP;
@@ -9330,7 +9350,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 
 			TextureDesc desc = envrenderingColorBuffer.GetDesc();
 
-			AerialPerspectiveCapturePushConstants push;
+			AerialPerspectiveCapturePushConstants push = {};
 			push.resolution.x = desc.width;
 			push.resolution.y = desc.height;
 			push.resolution_rcp.x = 1.0f / push.resolution.x;
@@ -9340,25 +9360,16 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 
 			device->PushConstants(&push, sizeof(push), cmd);
 
-			{
-				GPUBarrier barriers[] = {
-					GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS),
-				};
-				device->Barrier(barriers, arraysize(barriers), cmd);
-			}
+			device->Barrier(GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS), cmd);
 
 			device->Dispatch(
 				(desc.width + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
 				(desc.height + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
 				6,
-				cmd);
+				cmd
+			);
 
-			{
-				GPUBarrier barriers[] = {
-					GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE),
-				};
-				device->Barrier(barriers, arraysize(barriers), cmd);
-			}
+			device->Barrier(GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE), cmd);
 
 			device->EventEnd(cmd);
 		}
@@ -9403,7 +9414,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 
 			TextureDesc desc = envrenderingColorBuffer.GetDesc();
 
-			VolumetricCloudCapturePushConstants push;
+			VolumetricCloudCapturePushConstants push = {};
 			push.resolution.x = desc.width;
 			push.resolution.y = desc.height;
 			push.resolution_rcp.x = 1.0f / push.resolution.x;
@@ -9429,12 +9440,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 
 			device->PushConstants(&push, sizeof(push), cmd);
 
-			{
-				GPUBarrier barriers[] = {
-					GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS),
-				};
-				device->Barrier(barriers, arraysize(barriers), cmd);
-			}
+			device->Barrier(GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::SHADER_RESOURCE, ResourceState::UNORDERED_ACCESS), cmd);
 
 			device->Dispatch(
 				(desc.width + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
@@ -9442,12 +9448,7 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 				6,
 				cmd);
 
-			{
-				GPUBarrier barriers[] = {
-					GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE),
-				};
-				device->Barrier(barriers, arraysize(barriers), cmd);
-			}
+			device->Barrier(GPUBarrier::Image(&envrenderingColorBuffer, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE), cmd);
 
 			device->EventEnd(cmd);
 		}
@@ -9523,17 +9524,20 @@ void RefreshEnvProbes(const Visibility& vis, CommandList cmd)
 				desc.height *= 2;
 			}
 
-			{
-				GPUBarrier barriers[] = {
-					GPUBarrier::Image(&envrenderingColorBuffer_Filtered, ResourceState::UNORDERED_ACCESS, envrenderingColorBuffer_Filtered.desc.layout),
-				};
-				device->Barrier(barriers, arraysize(barriers), cmd);
-			}
+			device->Barrier(GPUBarrier::Image(&envrenderingColorBuffer_Filtered, ResourceState::UNORDERED_ACCESS, envrenderingColorBuffer_Filtered.desc.layout), cmd);
 		}
 		device->EventEnd(cmd);
 
-		// Finally, the complete envmap is block compressed into the probe's texture:
-		BlockCompress(envrenderingColorBuffer_Filtered, probe.texture, cmd);
+		if (IsFormatBlockCompressed(probe.texture.desc.format))
+		{
+			// Finally, the complete envmap is block compressed into the probe's texture:
+			BlockCompress(envrenderingColorBuffer_Filtered, probe.texture, cmd);
+		}
+		else
+		{
+			// In this case, block compression is not used, simply copy render result into final probe tex:
+			device->CopyResource(&probe.texture, &envrenderingColorBuffer_Filtered, cmd);
+		}
 	};
 
 	if (vis.scene->probes.GetCount() == 0)
@@ -10837,8 +10841,8 @@ void RayTraceScene(
 	}
 
 	device->Dispatch(
-		(desc.width + RAYTRACING_LAUNCH_BLOCKSIZE - 1) / RAYTRACING_LAUNCH_BLOCKSIZE,
-		(desc.height + RAYTRACING_LAUNCH_BLOCKSIZE - 1) / RAYTRACING_LAUNCH_BLOCKSIZE,
+		(desc.width + 7) / 8,
+		(desc.height + 3) / 4,
 		1,
 		cmd
 	);
@@ -13480,8 +13484,8 @@ void Postprocess_RTAO(
 	device->ClearUAV(&output, 0, cmd);
 
 	device->Dispatch(
-		(postprocess.resolution.x + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
-		(postprocess.resolution.y + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
+		(postprocess.resolution.x + 7) / 8,
+		(postprocess.resolution.y + 3) / 4,
 		1,
 		cmd
 	);
@@ -13663,14 +13667,16 @@ void Postprocess_RTAO(
 	wi::profiler::EndRange(prof_range);
 	device->EventEnd(cmd);
 }
-void CreateRTDiffuseResources(RTDiffuseResources& res, XMUINT2 resolution)
+void CreateRTDiffuseResources(RTDiffuseResources& res, XMUINT2 resolution, PostProcessQuality quality)
 {
 	res.frame = 0;
+	res.quality = quality;
+	const uint32_t downscale = quality_downscalefactor(quality);
 
 	TextureDesc desc;
 	desc.type = TextureDesc::Type::TEXTURE_2D;
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
+	desc.width = resolution.x / downscale;
+	desc.height = resolution.y / downscale;
 	desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
 
@@ -13751,16 +13757,14 @@ void Postprocess_RTDiffuse(
 
 	BindCommonResources(cmd);
 
-	const TextureDesc& desc = output.desc;
-
-	// Render half-res:
 	PostProcess postprocess;
-	postprocess.resolution.x = desc.width / 2;
-	postprocess.resolution.y = desc.height / 2;
+	postprocess.resolution.x = res.texture_rayIndirectDiffuse.desc.width;
+	postprocess.resolution.y = res.texture_rayIndirectDiffuse.desc.height;
 	postprocess.resolution_rcp.x = 1.0f / postprocess.resolution.x;
 	postprocess.resolution_rcp.y = 1.0f / postprocess.resolution.y;
 	rtdiffuse_range = range;
 	rtdiffuse_frame = (float)res.frame;
+	rtdiffuse_downscalefactor = (float)quality_downscalefactor(res.quality);
 	uint8_t instanceInclusionMask = 0xFF;
 	std::memcpy(&postprocess.params1.x, &instanceInclusionMask, sizeof(instanceInclusionMask));
 
@@ -13797,6 +13801,8 @@ void Postprocess_RTDiffuse(
 	{
 		device->EventBegin("RTDiffuse - spatial resolve", cmd);
 		device->BindComputeShader(&shaders[CSTYPE_POSTPROCESS_RTDIFFUSE_SPATIAL], cmd);
+
+		device->PushConstants(&postprocess, sizeof(postprocess), cmd);
 
 		const GPUResource* resarray[] = {
 			&res.texture_rayIndirectDiffuse,
@@ -13866,6 +13872,8 @@ void Postprocess_RTDiffuse(
 		device->EventEnd(cmd);
 	}
 
+	const TextureDesc& desc = output.desc;
+
 	// Full res:
 	postprocess.resolution.x = desc.width;
 	postprocess.resolution.y = desc.height;
@@ -13922,8 +13930,8 @@ void CreateSSGIResources(SSGIResources& res, XMUINT2 resolution)
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
 	desc.format = Format::R11G11B10_FLOAT;
 
-	resolution.x = AlignTo(resolution.x, 64u);
-	resolution.y = AlignTo(resolution.y, 64u);
+	resolution.x = align(resolution.x, 64u);
+	resolution.y = align(resolution.y, 64u);
 
 	desc.width = (resolution.x + 7) / 8;
 	desc.height = (resolution.y + 7) / 8;
@@ -14316,8 +14324,8 @@ void Postprocess_SSGI(
 			device->BindUAV(&output, 0, cmd);
 
 			const TextureDesc& desc = output.desc;
-			postprocess.resolution.x = AlignTo(desc.width, 64u);	// align = uv correction!
-			postprocess.resolution.y = AlignTo(desc.height, 64u);	// align = uv correction!
+			postprocess.resolution.x = align(desc.width, 64u);	// align = uv correction!
+			postprocess.resolution.y = align(desc.height, 64u);	// align = uv correction!
 			postprocess.resolution_rcp.x = 1.0f / postprocess.resolution.x;
 			postprocess.resolution_rcp.y = 1.0f / postprocess.resolution.y;
 			postprocess.params0.x = 1; // range
@@ -14350,35 +14358,44 @@ void Postprocess_SSGI(
 	wi::profiler::EndRange(profilerRange);
 	device->EventEnd(cmd);
 }
-void CreateRTReflectionResources(RTReflectionResources& res, XMUINT2 resolution)
+void CreateRTReflectionResources(RTReflectionResources& res, XMUINT2 resolution, PostProcessQuality quality)
 {
 	res.frame = 0;
+	res.quality = quality;
+	const uint32_t downscale = quality_downscalefactor(quality);
 
 	TextureDesc desc;
 	desc.type = TextureDesc::Type::TEXTURE_2D;
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
+	desc.width = resolution.x / downscale;
+	desc.height = resolution.y / downscale;
 	desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
 
 	desc.format = Format::R16G16B16A16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_rayIndirectSpecular);
+	device->SetName(&res.texture_rayIndirectSpecular, "rtreflection.texture_rayIndirectSpecular");
 	device->CreateTexture(&desc, nullptr, &res.texture_rayDirectionPDF);
+	device->SetName(&res.texture_rayDirectionPDF, "rtreflection.texture_rayDirectionPDF");
 	desc.format = Format::R16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_rayLengths);
-	device->SetName(&res.texture_rayLengths, "ssr_rayLengths");
+	device->SetName(&res.texture_rayLengths, "rtreflection.texture_rayLengths");
 
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
 	desc.format = Format::R16G16B16A16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_resolve);
+	device->SetName(&res.texture_resolve, "rtreflection.texture_resolve");
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal[0]);
+	device->SetName(&res.texture_temporal[0], "rtreflection.texture_temporal[0]");
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal[1]);
+	device->SetName(&res.texture_temporal[1], "rtreflection.texture_temporal[1]");
 	desc.format = Format::R16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_resolve_variance);
+	device->SetName(&res.texture_resolve_variance, "rtreflection.texture_resolve_variance");
 	device->CreateTexture(&desc, nullptr, &res.texture_resolve_reprojectionDepth);
+	device->SetName(&res.texture_resolve_reprojectionDepth, "rtreflection.texture_resolve_reprojectionDepth");
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal_variance[0]);
+	device->SetName(&res.texture_temporal_variance[0], "rtreflection.texture_temporal_variance[0]");
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal_variance[1]);
+	device->SetName(&res.texture_temporal_variance[1], "rtreflection.texture_temporal_variance[1]");
 }
 void Postprocess_RTReflection(
 	const RTReflectionResources& res,
@@ -14434,6 +14451,7 @@ void Postprocess_RTReflection(
 		device->ClearUAV(&res.texture_temporal[1], 0, cmd);
 		device->ClearUAV(&res.texture_temporal_variance[0], 0, cmd);
 		device->ClearUAV(&res.texture_temporal_variance[1], 0, cmd);
+
 		{
 			GPUBarrier barriers[] = {
 				GPUBarrier::Memory(),
@@ -14446,17 +14464,15 @@ void Postprocess_RTReflection(
 
 	device->ClearUAV(&output, 0, cmd);
 
-	const TextureDesc& desc = output.desc;
-
-	// Render half-res:
 	PostProcess postprocess;
-	postprocess.resolution.x = desc.width / 2;
-	postprocess.resolution.y = desc.height / 2;
+	postprocess.resolution.x = res.texture_rayIndirectSpecular.desc.width;
+	postprocess.resolution.y = res.texture_rayIndirectSpecular.desc.height;
 	postprocess.resolution_rcp.x = 1.0f / postprocess.resolution.x;
 	postprocess.resolution_rcp.y = 1.0f / postprocess.resolution.y;
 	rtreflection_range = range;
 	rtreflection_roughness_cutoff = roughnessCutoff;
 	rtreflection_frame = (float)res.frame;
+	rtreflection_downscalefactor = (float)quality_downscalefactor(res.quality);
 	uint8_t instanceInclusionMask = raytracing_inclusion_mask_reflection;
 	std::memcpy(&postprocess.params1.x, &instanceInclusionMask, sizeof(instanceInclusionMask));
 
@@ -14512,8 +14528,8 @@ void Postprocess_RTReflection(
 		dispatchraysdesc.hit_group.size = shaderIdentifierSize;
 		dispatchraysdesc.hit_group.stride = shaderIdentifierSize;
 
-		dispatchraysdesc.width = desc.width / 2;
-		dispatchraysdesc.height = desc.height / 2;
+		dispatchraysdesc.width = res.texture_rayIndirectSpecular.GetDesc().width;
+		dispatchraysdesc.height = res.texture_rayIndirectSpecular.GetDesc().height;
 
 		device->DispatchRays(&dispatchraysdesc, cmd);
 
@@ -14560,15 +14576,6 @@ void Postprocess_RTReflection(
 		};
 		device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
 
-		{
-			GPUBarrier barriers[] = {
-				GPUBarrier::Image(&res.texture_resolve, res.texture_resolve.desc.layout, ResourceState::UNORDERED_ACCESS),
-				GPUBarrier::Image(&res.texture_resolve_variance, res.texture_resolve_variance.desc.layout, ResourceState::UNORDERED_ACCESS),
-				GPUBarrier::Image(&res.texture_resolve_reprojectionDepth, res.texture_resolve_reprojectionDepth.desc.layout, ResourceState::UNORDERED_ACCESS),
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
-		}
-
 		device->Dispatch(
 			(res.texture_resolve.GetDesc().width + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
 			(res.texture_resolve.GetDesc().height + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
@@ -14578,7 +14585,6 @@ void Postprocess_RTReflection(
 
 		{
 			GPUBarrier barriers[] = {
-				GPUBarrier::Memory(),
 				GPUBarrier::Image(&res.texture_resolve, ResourceState::UNORDERED_ACCESS, res.texture_resolve.desc.layout),
 				GPUBarrier::Image(&res.texture_resolve_variance, ResourceState::UNORDERED_ACCESS, res.texture_resolve_variance.desc.layout),
 				GPUBarrier::Image(&res.texture_resolve_reprojectionDepth, ResourceState::UNORDERED_ACCESS, res.texture_resolve_reprojectionDepth.desc.layout),
@@ -14610,14 +14616,6 @@ void Postprocess_RTReflection(
 		};
 		device->BindUAVs(uavs, 0, arraysize(uavs), cmd);
 
-		{
-			GPUBarrier barriers[] = {
-				GPUBarrier::Image(&res.texture_temporal[temporal_output], res.texture_temporal[temporal_output].desc.layout, ResourceState::UNORDERED_ACCESS),
-				GPUBarrier::Image(&res.texture_temporal_variance[temporal_output], res.texture_temporal_variance[temporal_output].desc.layout, ResourceState::UNORDERED_ACCESS),
-			};
-			device->Barrier(barriers, arraysize(barriers), cmd);
-		}
-
 		device->Dispatch(
 			(res.texture_temporal[temporal_output].GetDesc().width + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
 			(res.texture_temporal[temporal_output].GetDesc().height + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
@@ -14636,6 +14634,8 @@ void Postprocess_RTReflection(
 
 		device->EventEnd(cmd);
 	}
+
+	const TextureDesc& desc = output.desc;
 
 	// Upscale to full-res:
 	postprocess.resolution.x = desc.width;
@@ -14682,9 +14682,11 @@ void Postprocess_RTReflection(
 	wi::profiler::EndRange(profilerRange);
 	device->EventEnd(cmd);
 }
-void CreateSSRResources(SSRResources& res, XMUINT2 resolution)
+void CreateSSRResources(SSRResources& res, XMUINT2 resolution, PostProcessQuality quality)
 {
 	res.frame = 0;
+	res.quality = quality;
+	const uint32_t downscale = quality_downscalefactor(quality);
 
 	TextureDesc tile_desc;
 	tile_desc.type = TextureDesc::Type::TEXTURE_2D;
@@ -14716,8 +14718,8 @@ void CreateSSRResources(SSRResources& res, XMUINT2 resolution)
 
 	TextureDesc desc;
 	desc.type = TextureDesc::Type::TEXTURE_2D;
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
+	desc.width = resolution.x / downscale;
+	desc.height = resolution.y / downscale;
 	desc.format = Format::R16G16B16A16_FLOAT;
 	desc.bind_flags = BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
 	desc.layout = ResourceState::SHADER_RESOURCE_COMPUTE;
@@ -14726,9 +14728,6 @@ void CreateSSRResources(SSRResources& res, XMUINT2 resolution)
 	desc.format = Format::R16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_rayLengths);
 	device->SetName(&res.texture_rayLengths, "ssr_rayLengths");
-
-	desc.width = resolution.x / 2;
-	desc.height = resolution.y / 2;
 	desc.format = Format::R16G16B16A16_FLOAT;
 	device->CreateTexture(&desc, nullptr, &res.texture_resolve);
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal[0]);
@@ -14739,8 +14738,8 @@ void CreateSSRResources(SSRResources& res, XMUINT2 resolution)
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal_variance[0]);
 	device->CreateTexture(&desc, nullptr, &res.texture_temporal_variance[1]);
 
-	desc.width = (uint32_t)std::pow(2.0f, 1.0f + std::floor(std::log2((float)resolution.x / 2)));
-	desc.height = (uint32_t)std::pow(2.0f, 1.0f + std::floor(std::log2((float)resolution.y / 2)));
+	desc.width = (uint32_t)std::pow(2.0f, 1.0f + std::floor(std::log2((float)resolution.x / downscale)));
+	desc.height = (uint32_t)std::pow(2.0f, 1.0f + std::floor(std::log2((float)resolution.y / downscale)));
 	desc.format = Format::R32G32_FLOAT;
 	desc.mip_levels = 1 + (uint32_t)std::floor(std::log2f(std::max((float)desc.width, (float)desc.height)));
 	device->CreateTexture(&desc, nullptr, &res.texture_depth_hierarchy);
@@ -14773,6 +14772,9 @@ void Postprocess_SSR(
 
 	{
 		GPUBarrier barriers[] = {
+			GPUBarrier::Image(&res.texture_rayIndirectSpecular, res.texture_rayIndirectSpecular.desc.layout, ResourceState::UNORDERED_ACCESS),
+			GPUBarrier::Image(&res.texture_rayDirectionPDF, res.texture_rayDirectionPDF.desc.layout, ResourceState::UNORDERED_ACCESS),
+			GPUBarrier::Image(&res.texture_rayLengths, res.texture_rayLengths.desc.layout, ResourceState::UNORDERED_ACCESS),
 			GPUBarrier::Image(&res.texture_tile_minmax_roughness_horizontal, res.texture_tile_minmax_roughness_horizontal.desc.layout, ResourceState::UNORDERED_ACCESS),
 			GPUBarrier::Image(&res.texture_tile_minmax_roughness, res.texture_tile_minmax_roughness.desc.layout, ResourceState::UNORDERED_ACCESS),
 			GPUBarrier::Image(&res.texture_resolve, res.texture_resolve.desc.layout, ResourceState::UNORDERED_ACCESS),
@@ -14794,6 +14796,9 @@ void Postprocess_SSR(
 			};
 			device->Barrier(barriers, arraysize(barriers), cmd);
 		}
+		device->ClearUAV(&res.texture_rayIndirectSpecular, 0, cmd);
+		device->ClearUAV(&res.texture_rayDirectionPDF, 0, cmd);
+		device->ClearUAV(&res.texture_rayLengths, 0, cmd);
 		device->ClearUAV(&res.texture_tile_minmax_roughness_horizontal, 0, cmd);
 		device->ClearUAV(&res.texture_tile_minmax_roughness, 0, cmd);
 		device->ClearUAV(&res.texture_resolve, 0, cmd);
@@ -14837,6 +14842,7 @@ void Postprocess_SSR(
 	PostProcess postprocess;
 	ssr_roughness_cutoff = roughnessCutoff;
 	ssr_frame = (float)res.frame;
+	ssr_downscalefactor = (float)quality_downscalefactor(res.quality);
 
 	// Compute tile classification (horizontal):
 	{
@@ -14980,21 +14986,16 @@ void Postprocess_SSR(
 		device->EventEnd(cmd);
 	}
 
-	const TextureDesc& desc = output.GetDesc();
-
 	// Render half-res:
-	postprocess.resolution.x = desc.width / 2;
-	postprocess.resolution.y = desc.height / 2;
+	postprocess.resolution.x = res.texture_rayIndirectSpecular.desc.width;
+	postprocess.resolution.y = res.texture_rayIndirectSpecular.desc.height;
 	postprocess.resolution_rcp.x = 1.0f / postprocess.resolution.x;
 	postprocess.resolution_rcp.y = 1.0f / postprocess.resolution.y;
 	ssr_roughness_cutoff = roughnessCutoff;
 	ssr_frame = (float)res.frame;
-
-	// Factor to scale ratio between hierarchy and trace pass
-	postprocess.params1.x = (float)postprocess.resolution.x / (float)res.texture_depth_hierarchy.GetDesc().width;
-	postprocess.params1.y = (float)postprocess.resolution.y / (float)res.texture_depth_hierarchy.GetDesc().height;
-	postprocess.params1.z = 1.0f / postprocess.params1.x;
-	postprocess.params1.w = 1.0f / postprocess.params1.y;
+	ssr_ratiofactorx = (float)postprocess.resolution.x / (float)res.texture_depth_hierarchy.GetDesc().width;
+	ssr_ratiofactory = (float)postprocess.resolution.y / (float)res.texture_depth_hierarchy.GetDesc().height;
+	ssr_downscalefactor = (float)quality_downscalefactor(res.quality);
 
 	// Raytrace pass:
 	{
@@ -15022,9 +15023,6 @@ void Postprocess_SSR(
 				GPUBarrier::Buffer(&res.buffer_tiles_tracing_earlyexit, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE),
 				GPUBarrier::Buffer(&res.buffer_tiles_tracing_cheap, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE),
 				GPUBarrier::Buffer(&res.buffer_tiles_tracing_expensive, ResourceState::UNORDERED_ACCESS, ResourceState::SHADER_RESOURCE),
-				GPUBarrier::Image(&res.texture_rayIndirectSpecular, res.texture_rayIndirectSpecular.desc.layout, ResourceState::UNORDERED_ACCESS),
-				GPUBarrier::Image(&res.texture_rayDirectionPDF, res.texture_rayDirectionPDF.desc.layout, ResourceState::UNORDERED_ACCESS),
-				GPUBarrier::Image(&res.texture_rayLengths, res.texture_rayLengths.desc.layout, ResourceState::UNORDERED_ACCESS),
 			};
 			device->Barrier(barriers, arraysize(barriers), cmd);
 		}
@@ -15130,6 +15128,8 @@ void Postprocess_SSR(
 
 		device->EventEnd(cmd);
 	}
+
+	const TextureDesc& desc = output.GetDesc();
 
 	// Upscale to full-res:
 	postprocess.resolution.x = desc.width;
@@ -15343,8 +15343,8 @@ void Postprocess_RTShadow(
 	device->Barrier(GPUBarrier::Memory(), cmd);
 
 	device->Dispatch(
-		(postprocess.resolution.x + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
-		(postprocess.resolution.y + POSTPROCESS_BLOCKSIZE - 1) / POSTPROCESS_BLOCKSIZE,
+		(postprocess.resolution.x + 7) / 8,
+		(postprocess.resolution.y + 3) / 4,
 		1,
 		cmd
 	);
@@ -17310,7 +17310,7 @@ void CreateFSR2Resources(FSR2Resources& res, XMUINT2 render_resolution, XMUINT2 
 	desc.width = render_resolution.x / 2;
 	desc.height = render_resolution.y / 2;
 	desc.format = Format::R16_FLOAT;
-	desc.mip_levels = 0;
+	desc.mip_levels = GetMipCount(desc.width, desc.height);
 	success = device->CreateTexture(&desc, nullptr, &res.luminance_current);
 	assert(success);
 	device->SetName(&res.luminance_current, "fsr2::luminance_current");
@@ -18512,7 +18512,7 @@ void CopyDepthStencil(
 		vp.height = (float)output_depth_stencil.desc.height;
 		device->BindViewports(1, &vp, cmd);
 
-		Rect rect;
+		wi::graphics::Rect rect;
 		rect.left = 0;
 		rect.right = output_depth_stencil.desc.width;
 		rect.top = 0;
@@ -18689,7 +18689,7 @@ void ExtractStencil(
 		vp.height = (float)output.desc.height;
 		device->BindViewports(1, &vp, cmd);
 
-		Rect rect;
+		wi::graphics::Rect rect;
 		rect.left = 0;
 		rect.right = output.desc.width;
 		rect.top = 0;

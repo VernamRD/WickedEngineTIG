@@ -268,13 +268,12 @@ namespace wi::scene
 
 		// This must be after lightmap requests were determined:
 		TLAS_instancesMapped = nullptr;
-		if (IsAccelerationStructureUpdateRequested() && device->CheckCapability(GraphicsDeviceCapability::RAYTRACING))
+		if (instanceArraySize > 0 && IsAccelerationStructureUpdateRequested() && device->CheckCapability(GraphicsDeviceCapability::RAYTRACING))
 		{
 			GPUBufferDesc desc;
 			desc.stride = (uint32_t)device->GetTopLevelAccelerationStructureInstanceSize();
 			desc.size = desc.stride * instanceArraySize * 2; // *2 to grow fast
 			desc.usage = Usage::UPLOAD;
-			desc.alignment = 16ull; // vulkan
 			if (TLAS_instancesUpload->desc.size < desc.size)
 			{
 				for (int i = 0; i < arraysize(TLAS_instancesUpload); ++i)
@@ -286,8 +285,14 @@ namespace wi::scene
 			TLAS_instancesMapped = TLAS_instancesUpload[cpu_gpu_mapped_resource_index].mapped_data;
 
 			wi::jobsystem::Execute(ctx, [&](wi::jobsystem::JobArgs args) {
-				// Must not keep inactive TLAS instances, so zero them out for safety:
-				std::memset(TLAS_instancesMapped, 0, TLAS_instancesUpload->desc.size);
+				// Must not keep inactive TLAS instances, so zero them out for safety with invalid instances:
+				//	Note: instead of memsetting, I use WriteTopLevelAccelerationStructureInstance with null instance, so if device requires setup other than zeroing it will still work
+				const uint32_t instanceCount = uint32_t(TLAS_instancesUpload->desc.size / TLAS_instancesUpload->desc.stride);
+				const size_t instanceSize = device->GetTopLevelAccelerationStructureInstanceSize();
+				for (uint32_t i = 0; i < instanceCount; ++i)
+				{
+					device->WriteTopLevelAccelerationStructureInstance(nullptr, (uint8_t*)TLAS_instancesMapped + i * instanceSize);
+				}
 			});
 		}
 
@@ -443,7 +448,13 @@ namespace wi::scene
 					bufdesc.misc_flags |= ResourceMiscFlag::RAY_TRACING;
 					bufdesc.stride = (uint32_t)device->GetTopLevelAccelerationStructureInstanceSize();
 					bufdesc.size = bufdesc.stride * desc.top_level.count;
-					bool success = device->CreateBuffer(&bufdesc, nullptr, &desc.top_level.instance_buffer);
+					auto safety_init = [&](void* dest) {
+						for (uint32_t i = 0; i < desc.top_level.count; ++i)
+						{
+							device->WriteTopLevelAccelerationStructureInstance(nullptr, (uint8_t*)dest + i * bufdesc.stride);
+						}
+					};
+					bool success = device->CreateBuffer2(&bufdesc, safety_init, &desc.top_level.instance_buffer);
 					assert(success);
 					device->SetName(&desc.top_level.instance_buffer, "Scene::TLAS.instanceBuffer");
 					success = device->CreateRaytracingAccelerationStructure(&desc, &TLAS);
@@ -723,11 +734,11 @@ namespace wi::scene
 					;
 
 				desc.size =
-					AlignTo(sizeof(IndirectDrawArgsIndexedInstanced), alignment) +	// indirect args
-					AlignTo(allocated_impostor_capacity * sizeof(uint) * 6, alignment) +	// indices (must overestimate here for 32-bit indices, because we create 16 bit and 32 bit descriptors)
-					AlignTo(allocated_impostor_capacity * sizeof(MeshComponent::Vertex_POS32W) * 4, alignment) +	// vertices
-					AlignTo(allocated_impostor_capacity * sizeof(MeshComponent::Vertex_NOR) * 4, alignment) +	// vertices
-					AlignTo(allocated_impostor_capacity * sizeof(uint2), alignment)		// impostordata
+					align((uint64_t)sizeof(IndirectDrawArgsIndexedInstanced), alignment) +	// indirect args
+					align(uint64_t(allocated_impostor_capacity * sizeof(uint) * 6), alignment) +	// indices (must overestimate here for 32-bit indices, because we create 16 bit and 32 bit descriptors)
+					align(uint64_t(allocated_impostor_capacity * sizeof(MeshComponent::Vertex_POS32W) * 4), alignment) +	// vertices
+					align(uint64_t(allocated_impostor_capacity * sizeof(MeshComponent::Vertex_NOR) * 4), alignment) +	// vertices
+					align(uint64_t(allocated_impostor_capacity * sizeof(uint2)), alignment)		// impostordata
 				;
 				device->CreateBufferZeroed(&desc, &impostorBuffer);
 				device->SetName(&impostorBuffer, "impostorBuffer");
@@ -735,13 +746,13 @@ namespace wi::scene
 				uint64_t buffer_offset = 0ull;
 
 				const uint32_t indirect_stride = sizeof(IndirectDrawArgsIndexedInstanced);
-				buffer_offset = AlignTo(buffer_offset, alignment);
+				buffer_offset = align(buffer_offset, alignment);
 				impostor_indirect.offset = buffer_offset;
 				impostor_indirect.size = sizeof(IndirectDrawArgsIndexedInstanced);
 				impostor_indirect.subresource_uav = device->CreateSubresource(&impostorBuffer, SubresourceType::UAV, impostor_indirect.offset, impostor_indirect.size, nullptr, &indirect_stride);
 				buffer_offset += impostor_indirect.size;
 
-				buffer_offset = AlignTo(buffer_offset, alignment);
+				buffer_offset = align(buffer_offset, alignment);
 				Format format32 = Format::R32_UINT;
 				Format format16 = Format::R16_UINT;
 				impostor_ib32.offset = buffer_offset;
@@ -759,7 +770,7 @@ namespace wi::scene
 				impostor_ib16.descriptor_srv = device->GetDescriptorIndex(&impostorBuffer, SubresourceType::SRV, impostor_ib16.subresource_srv);
 				impostor_ib16.descriptor_uav = device->GetDescriptorIndex(&impostorBuffer, SubresourceType::UAV, impostor_ib16.subresource_uav);
 
-				buffer_offset = AlignTo(buffer_offset, alignment);
+				buffer_offset = align(buffer_offset, alignment);
 				impostor_vb_pos.offset = buffer_offset;
 				impostor_vb_pos.size = allocated_impostor_capacity * sizeof(MeshComponent::Vertex_POS32W) * 4;
 				impostor_vb_pos.subresource_srv = device->CreateSubresource(&impostorBuffer, SubresourceType::SRV, impostor_vb_pos.offset, impostor_vb_pos.size, &MeshComponent::Vertex_POS32W::FORMAT);
@@ -768,7 +779,7 @@ namespace wi::scene
 				impostor_vb_pos.descriptor_uav = device->GetDescriptorIndex(&impostorBuffer, SubresourceType::UAV, impostor_vb_pos.subresource_uav);
 				buffer_offset += impostor_vb_pos.size;
 
-				buffer_offset = AlignTo(buffer_offset, alignment);
+				buffer_offset = align(buffer_offset, alignment);
 				impostor_vb_nor.offset = buffer_offset;
 				impostor_vb_nor.size = allocated_impostor_capacity * sizeof(MeshComponent::Vertex_NOR) * 4;
 				impostor_vb_nor.subresource_srv = device->CreateSubresource(&impostorBuffer, SubresourceType::SRV, impostor_vb_nor.offset, impostor_vb_nor.size, &MeshComponent::Vertex_NOR::FORMAT);
@@ -777,7 +788,7 @@ namespace wi::scene
 				impostor_vb_nor.descriptor_uav = device->GetDescriptorIndex(&impostorBuffer, SubresourceType::UAV, impostor_vb_nor.subresource_uav);
 				buffer_offset += impostor_vb_nor.size;
 
-				buffer_offset = AlignTo(buffer_offset, alignment);
+				buffer_offset = align(buffer_offset, alignment);
 				impostor_data.offset = buffer_offset;
 				impostor_data.size = allocated_impostor_capacity * sizeof(uint2);
 				impostor_data.subresource_srv = device->CreateSubresource(&impostorBuffer, SubresourceType::SRV, impostor_data.offset, impostor_data.size);
@@ -2980,13 +2991,13 @@ namespace wi::scene
 						}
 					}
 					current_sample *= info.channel_count;
-					current_sample = std::min(current_sample, info.sample_count);
+					current_sample = std::min(current_sample, (uint64_t)info.sample_count);
 
 					float voice = 0;
 					const int sample_count = 64;
 					for (int sam = 0; sam < sample_count; ++sam)
 					{
-						voice = std::max(voice, std::abs((float)info.samples[std::min(current_sample + sam, info.sample_count)] / 32768.0f));
+						voice = std::max(voice, std::abs((float)info.samples[std::min(current_sample + sam, (uint64_t)info.sample_count)] / 32768.0f));
 					}
 					const float strength = 0.4f;
 					if (voice > 0.1f)
@@ -4181,16 +4192,30 @@ namespace wi::scene
 
 			if (textureStreamingFeedbackMapped != nullptr)
 			{
-				const uint32_t request_packed = textureStreamingFeedbackMapped[args.jobIndex];
-				if (request_packed != 0)
+				if (material.IsTextureStreamingDisabled())
 				{
-					const uint32_t request_uvset0 = request_packed & 0xFFFF;
-					const uint32_t request_uvset1 = (request_packed >> 16u) & 0xFFFF;
+					// Request maximum resolution to keep textures fully loaded
 					for (auto& slot : material.textures)
 					{
 						if (slot.resource.IsValid())
 						{
-							slot.resource.StreamingRequestResolution(slot.uvset == 0 ? request_uvset0 : request_uvset1);
+							slot.resource.StreamingRequestResolution(65536);
+						}
+					}
+				}
+				else
+				{
+					const uint32_t request_packed = textureStreamingFeedbackMapped[args.jobIndex];
+					if (request_packed != 0)
+					{
+						const uint32_t request_uvset0 = request_packed & 0xFFFF;
+						const uint32_t request_uvset1 = (request_packed >> 16u) & 0xFFFF;
+						for (auto& slot : material.textures)
+						{
+							if (slot.resource.IsValid())
+							{
+								slot.resource.StreamingRequestResolution(slot.uvset == 0 ? request_uvset0 : request_uvset1);
+							}
 						}
 					}
 				}
@@ -4647,8 +4672,8 @@ namespace wi::scene
 						object.lightmapHeight = wi::math::GetNextPowerOfTwo(object.lightmapHeight + 1) / 2;
 
 						// align to BC6 block size:
-						object.lightmapWidth = wi::graphics::AlignTo(object.lightmapWidth, 4u);
-						object.lightmapHeight = wi::graphics::AlignTo(object.lightmapHeight, 4u);
+						object.lightmapWidth = align(object.lightmapWidth, 4u);
+						object.lightmapHeight = align(object.lightmapHeight, 4u);
 
 						object.lightmapWidth = clamp(object.lightmapWidth, 16u, 16384u);
 						object.lightmapHeight = clamp(object.lightmapHeight, 16u, 16384u);
@@ -5975,6 +6000,7 @@ namespace wi::scene
 			dirty |= spline.prev_filled != spline.IsFilled();
 			dirty |= spline.prev_width != spline.width;
 			dirty |= spline.prev_rotation != spline.rotation;
+			dirty |= spline.prev_fill_normals_mode != spline.fill_normals_mode;
 
 			bool dirty_terrain = spline.prev_terrain_modifier_amount != spline.terrain_modifier_amount;
 			dirty_terrain |= spline.prev_terrain_pushdown != spline.terrain_pushdown;
@@ -5986,6 +6012,7 @@ namespace wi::scene
 
 			spline.prev_width = spline.width;
 			spline.prev_rotation = spline.rotation;
+			spline.prev_fill_normals_mode = spline.fill_normals_mode;
 			spline.prev_looped = spline.IsLooped();
 			spline.prev_filled = spline.IsFilled();
 
@@ -6281,14 +6308,16 @@ namespace wi::scene
 								mesh->indices.push_back(current);
 								mesh->indices.push_back(next);
 							}
-
-							mesh->ComputeNormals(MeshComponent::COMPUTE_NORMALS_SMOOTH_FAST);
+						}
+						assert(vertexCount == mesh->vertex_positions.size());
+						assert(indexCount == mesh->indices.size());
+						if (generateFill)
+						{
+							mesh->ComputeNormals(spline.fill_normals_mode);
 						}
 						MeshComponent::MeshSubset& subset = mesh->subsets.front();
 						subset.indexCount = (uint32_t)mesh->indices.size();
 						subset.indexOffset = 0;
-						assert(vertexCount == mesh->vertex_positions.size());
-						assert(indexCount == mesh->indices.size());
 						mesh->CreateRenderData();
 					}
 					ObjectComponent* object = objects.GetComponent(entity);

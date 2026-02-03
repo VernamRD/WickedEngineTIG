@@ -29,6 +29,12 @@ constexpr T align(T value, T alignment)
 	return ((value + alignment - T(1)) / alignment) * alignment;
 }
 
+template<typename T>
+constexpr bool is_aligned(T value, T alignment)
+{
+	return align(value, alignment) == value;
+}
+
 template <typename T>
 constexpr T sqr(T x) { return x * x; }
 
@@ -103,18 +109,22 @@ struct StackVector
 {
 	T items[count] = {};
 	unsigned last = 0;
+	constexpr void resize(unsigned size) { last = size; }
 	constexpr unsigned size() const { return last; }
 	constexpr bool empty() const { return last == 0; }
 	constexpr void push_back(const T& item) { items[last++] = item; }
 	constexpr void push_back(T&& item) { items[last++] = static_cast<T&&>(item); }
 	constexpr void pop_back() { if (!empty()) items[--last] = {}; }
 	constexpr void clear() { for (unsigned i = 0; i < count; ++i) items[i] = {}; last = 0; }
+	constexpr T* data() { return items; }
+	constexpr const T* data() const { return items; }
 	constexpr T* begin() { return items; }
 	constexpr T* end() { return items + last; }
 	constexpr const T& back() const { return items[last - 1]; }
-	constexpr T& back() { return items[0]; }
-	constexpr const T& front() const { return items[last - 1]; }
+	constexpr T& back() { return items[last - 1]; }
+	constexpr const T& front() const { return items[0]; }
 	constexpr T& front() { return items[0]; }
+	constexpr T& emplace_back() { push_back({}); return back(); }
 	constexpr const T& operator[](unsigned index) const { return items[index]; }
 	constexpr T& operator[](unsigned index) { return items[index]; }
 };
@@ -378,7 +388,18 @@ constexpr bool has_flag(E lhs, E rhs)
 {
 	return (lhs & rhs) == rhs;
 }
-
+template<typename T, typename U>
+constexpr void set_flag(T& flags, const U flag, const bool set)
+{
+	if (set)
+	{
+		flags |= static_cast<T>(flag);
+	}
+	else
+	{
+		flags &= ~static_cast<T>(flag);
+	}
+}
 // Extract file name from a path at compile-time
 constexpr const char* relative_path(const char* path)
 {

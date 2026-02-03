@@ -114,6 +114,9 @@ namespace wi
 
 				device->CreateTexture(&desc, nullptr, &rtMain_render);
 				device->SetName(&rtMain_render, "rtMain_render");
+				
+				// Note: graphics API can downgrade sample count for last supported value, this will be reflected in the renderpath setting too
+				msaaSampleCount = std::min(msaaSampleCount, rtMain_render.desc.sample_count);
 			}
 			else
 			{
@@ -994,7 +997,7 @@ namespace wi
 			device->EventBegin("Opaque Z-prepass", cmd);
 			auto range = wi::profiler::BeginRangeGPU("Z-Prepass", cmd);
 
-			Rect scissor = GetScissorInternalResolution();
+			wi::graphics::Rect scissor = GetScissorInternalResolution();
 			device->BindScissorRects(1, &scissor, cmd);
 
 			Viewport vp;
@@ -1201,9 +1204,9 @@ namespace wi
 				RenderPassImage rp[] = {
 					RenderPassImage::DepthStencil(&depthBuffer_Main),
 				};
-				device->RenderPassBegin(rp, arraysize(rp), cmd);
+				device->RenderPassBegin(rp, arraysize(rp), &scene->queryHeap, cmd);
 
-				Rect scissor = GetScissorInternalResolution();
+				wi::graphics::Rect scissor = GetScissorInternalResolution();
 				device->BindScissorRects(1, &scissor, cmd);
 
 				Viewport vp;
@@ -1549,7 +1552,7 @@ namespace wi
 			vp.height = (float)depthBuffer_Main.GetDesc().height;
 			device->BindViewports(1, &vp, cmd);
 
-			Rect scissor = GetScissorInternalResolution();
+			wi::graphics::Rect scissor = GetScissorInternalResolution();
 			device->BindScissorRects(1, &scissor, cmd);
 
 			if (getOutlineEnabled())
@@ -1965,7 +1968,7 @@ namespace wi
 				vp.height = (float)depthBuffer_Main.GetDesc().height;
 				device->BindViewports(1, &vp, cmd);
 
-				Rect scissor = GetScissorInternalResolution();
+				wi::graphics::Rect scissor = GetScissorInternalResolution();
 				device->BindScissorRects(1, &scissor, cmd);
 
 				wi::renderer::DrawSun(cmd);
@@ -2103,7 +2106,7 @@ namespace wi
 			device->Barrier(barriers, arraysize(barriers), cmd);
 		}
 
-		Rect scissor = GetScissorInternalResolution();
+		wi::graphics::Rect scissor = GetScissorInternalResolution();
 		device->BindScissorRects(1, &scissor, cmd);
 
 		Viewport vp;
@@ -2563,6 +2566,15 @@ namespace wi
 				continue;
 			}
 
+			camera.render_to_texture.time_accumulator += scene->dt;
+			bool should_render = (camera.render_to_texture.update_interval <= 0.0f) || 
+				(camera.render_to_texture.time_accumulator >= camera.render_to_texture.update_interval);
+			if (!should_render)
+			{
+				continue;
+			}
+			camera.render_to_texture.time_accumulator = 0.0f;
+
 			GraphicsDevice* device = GetDevice();
 			CommandList cmd = device->BeginCommandList();
 
@@ -2577,7 +2589,7 @@ namespace wi
 				desc.height = camera.render_to_texture.resolution.y;
 				desc.format = wi::renderer::format_rendertarget_main;
 				desc.bind_flags = BindFlag::RENDER_TARGET | BindFlag::SHADER_RESOURCE | BindFlag::UNORDERED_ACCESS;
-				desc.mip_levels = 0;
+				desc.mip_levels = GetMipCount(desc.width, desc.height);
 				bool success = device->CreateTexture(&desc, nullptr, &camera.render_to_texture.rendertarget_render);
 				assert(success);
 				device->SetName(&camera.render_to_texture.rendertarget_render, "CameraComponent::RenderToTexture::rendertarget_render");
@@ -2648,6 +2660,8 @@ namespace wi
 			}
 			camera.width = (float)camera.render_to_texture.resolution.x;
 			camera.height = (float)camera.render_to_texture.resolution.y;
+			camera.UpdateCamera();
+
 			if (camera.render_to_texture.depthstencil_resolved.IsValid())
 			{
 				camera.texture_depth_index = device->GetDescriptorIndex(&camera.render_to_texture.depthstencil_resolved, SubresourceType::SRV);
@@ -2682,7 +2696,7 @@ namespace wi
 					camera,
 					cmd
 				);
-				Rect scissor;
+				wi::graphics::Rect scissor;
 				scissor.right = (int32_t)camera.render_to_texture.depthstencil.desc.width;
 				scissor.bottom = (int32_t)camera.render_to_texture.depthstencil.desc.height;
 				device->BindScissorRects(1, &scissor, cmd);
@@ -2749,7 +2763,8 @@ namespace wi
 
 					if (camera.IsCRT() && getSceneUpdateEnabled())
 					{
-						wi::renderer::Postprocess_CRT(camera.render_to_texture.rendertarget_render, camera.render_to_texture.rendertarget_display, cmd, 0.2f, frameCB.time * 100, false);
+						wi::renderer::Postprocess_CRT(camera.render_to_texture.rendertarget_render, camera.render_to_texture.rendertarget_display, cmd, 0, 0, false);
+						// Swap so rendertarget_render now contains the CRT-processed result for mipchain and display
 						std::swap(camera.render_to_texture.rendertarget_render, camera.render_to_texture.rendertarget_display);
 					}
 
@@ -2855,7 +2870,7 @@ namespace wi
 			device->CreateTexture(&desc, nullptr, &rtSSR);
 			device->SetName(&rtSSR, "rtSSR");
 
-			wi::renderer::CreateSSRResources(ssrResources, internalResolution);
+			wi::renderer::CreateSSRResources(ssrResources, internalResolution, ssrQuality);
 		}
 		else
 		{
@@ -2908,7 +2923,7 @@ namespace wi
 			device->CreateTexture(&desc, nullptr, &rtSSR);
 			device->SetName(&rtSSR, "rtSSR");
 
-			wi::renderer::CreateRTReflectionResources(rtreflectionResources, internalResolution);
+			wi::renderer::CreateRTReflectionResources(rtreflectionResources, internalResolution, raytracedReflectionsQuality);
 		}
 		else
 		{
@@ -2934,7 +2949,7 @@ namespace wi
 			device->CreateTexture(&desc, nullptr, &rtRaytracedDiffuse);
 			device->SetName(&rtRaytracedDiffuse, "rtRaytracedDiffuse");
 
-			wi::renderer::CreateRTDiffuseResources(rtdiffuseResources, internalResolution);
+			wi::renderer::CreateRTDiffuseResources(rtdiffuseResources, internalResolution, raytracedDiffuseQuality);
 		}
 		else
 		{
@@ -3106,7 +3121,9 @@ namespace wi
 		else
 		{
 			rtReflection = {};
+			rtReflection_resolved = {};
 			depthBuffer_Reflection = {};
+			depthBuffer_Reflection_resolved = {};
 			tiledLightResources_planarReflection = {};
 		}
 	}
@@ -3116,7 +3133,10 @@ namespace wi
 
 		if (value)
 		{
-			wi::renderer::CreateBloomResources(bloomResources, GetInternalResolution());
+			const XMUINT2 internalResolution = GetInternalResolution();
+			if (internalResolution.x == 0 || internalResolution.y == 0)
+				return;
+			wi::renderer::CreateBloomResources(bloomResources, internalResolution);
 		}
 		else
 		{
@@ -3129,8 +3149,8 @@ namespace wi
 
 		if (value)
 		{
-			GraphicsDevice* device = wi::graphics::GetDevice();
-			XMUINT2 internalResolution = GetInternalResolution();
+			const GraphicsDevice* device = wi::graphics::GetDevice();
+			const XMUINT2 internalResolution = GetInternalResolution();
 			if (internalResolution.x == 0 || internalResolution.y == 0)
 				return;
 

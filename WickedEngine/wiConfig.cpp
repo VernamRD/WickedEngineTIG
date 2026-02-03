@@ -13,7 +13,7 @@ namespace wi::config
 
 	bool Section::GetBool(const char* name) const
 	{
-		auto it = values.find(name);
+		const auto it = values.find(name);
 		if (it == values.end())
 		{
 			return 0;
@@ -26,11 +26,15 @@ namespace wi::config
 		{
 			return false;
 		}
+		if (it->second.empty())
+		{
+			return 0;
+		}
 		return std::stoi(it->second) != 0;
 	}
 	int Section::GetInt(const char* name) const
 	{
-		auto it = values.find(name);
+		const auto it = values.find(name);
 		if (it == values.end())
 		{
 			return 0;
@@ -43,11 +47,15 @@ namespace wi::config
 		{
 			return 0;
 		}
+		if (it->second.empty())
+		{
+			return 0;
+		}
 		return std::stoi(it->second);
 	}
 	uint32_t Section::GetUint(const char* name) const
 	{
-		auto it = values.find(name);
+		const auto it = values.find(name);
 		if (it == values.end())
 		{
 			return 0u;
@@ -60,11 +68,15 @@ namespace wi::config
 		{
 			return 0u;
 		}
+		if (it->second.empty())
+		{
+			return 0u;
+		}
 		return (uint32_t)std::stoul(it->second);
 	}
 	float Section::GetFloat(const char* name) const
 	{
-		auto it = values.find(name);
+		const auto it = values.find(name);
 		if (it == values.end())
 		{
 			return 0;
@@ -77,16 +89,102 @@ namespace wi::config
 		{
 			return 0;
 		}
+		if (it->second.empty())
+		{
+			return 0;
+		}
 		return std::stof(it->second);
 	}
 	std::string Section::GetText(const char* name) const
 	{
-		auto it = values.find(name);
+		const auto it = values.find(name);
 		if (it == values.end())
 		{
 			return "";
 		}
 		return it->second;
+	}
+
+	std::vector<std::string> Section::GetTextArray(const char* name) const
+	{
+		std::vector<std::string> result;
+		const auto it = values.find(name);
+		if (it == values.end())
+		{
+			return result;
+		}
+		const std::string& str = it->second;
+		if (str.empty())
+		{
+			return result;
+		}
+		size_t start = 0;
+		size_t end = str.find(',');
+		while (end != std::string::npos)
+		{
+			std::string token = str.substr(start, end - start);
+			// Trim leading/trailing whitespace
+			size_t first = token.find_first_not_of(" \t");
+			size_t last = token.find_last_not_of(" \t");
+			if (first != std::string::npos)
+				result.push_back(token.substr(first, last - first + 1));
+			else
+				result.push_back("");
+			start = end + 1;
+			end = str.find(',', start);
+		}
+		// Last token
+		std::string token = str.substr(start);
+		size_t first = token.find_first_not_of(" \t");
+		size_t last = token.find_last_not_of(" \t");
+		if (first != std::string::npos)
+			result.push_back(token.substr(first, last - first + 1));
+		else
+			result.push_back("");
+		return result;
+	}
+	std::vector<int> Section::GetIntArray(const char* name) const
+	{
+		std::vector<int> result;
+		std::vector<std::string> strings = GetTextArray(name);
+		result.reserve(strings.size());
+		for (const auto& s : strings)
+		{
+			if (!s.empty())
+				result.push_back(std::stoi(s));
+			else
+				result.push_back(0);
+		}
+		return result;
+	}
+	std::vector<float> Section::GetFloatArray(const char* name) const
+	{
+		std::vector<float> result;
+		std::vector<std::string> strings = GetTextArray(name);
+		result.reserve(strings.size());
+		for (const auto& s : strings)
+		{
+			if (!s.empty())
+				result.push_back(std::stof(s));
+			else
+				result.push_back(0.0f);
+		}
+		return result;
+	}
+	size_t Section::GetCount(const char* name) const
+	{
+		const auto it = values.find(name);
+		if (it == values.end() || it->second.empty())
+		{
+			return 0;
+		}
+		size_t count = 1;
+		for (char c : it->second)
+		{
+			if (c == ',')
+				count++;
+		}
+		return count;
 	}
 
 	void Section::Set(const char* name, bool value)
@@ -112,6 +210,39 @@ namespace wi::config
 	void Section::Set(const char* name, const std::string& value)
 	{
 		values[name] = value;
+	}
+	void Section::Set(const char* name, const std::vector<std::string>& arr)
+	{
+		std::string result;
+		for (size_t i = 0; i < arr.size(); ++i)
+		{
+			if (i > 0)
+				result += ", ";
+			result += arr[i];
+		}
+		values[name] = result;
+	}
+	void Section::Set(const char* name, const std::vector<int>& arr)
+	{
+		std::string result;
+		for (size_t i = 0; i < arr.size(); ++i)
+		{
+			if (i > 0)
+				result += ", ";
+			result += std::to_string(arr[i]);
+		}
+		values[name] = result;
+	}
+	void Section::Set(const char* name, const std::vector<float>& arr)
+	{
+		std::string result;
+		for (size_t i = 0; i < arr.size(); ++i)
+		{
+			if (i > 0)
+				result += ", ";
+			result += std::to_string(arr[i]);
+		}
+		values[name] = result;
 	}
 
 	bool File::Open(const char* filename)
@@ -351,7 +482,6 @@ namespace wi::config
 				}
 			}
 		}
-		static std::mutex locker;
 		std::scoped_lock lck(locker);
 		wi::helper::FileWrite(filename, (const uint8_t*)text.c_str(), text.length());
 	}

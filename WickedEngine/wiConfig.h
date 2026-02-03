@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 
 namespace wi::config
 {
@@ -24,6 +25,14 @@ namespace wi::config
 		float GetFloat(const char* name) const;
 		std::string GetText(const char* name) const;
 
+		// Get multiple values for the key (comma-separated in the file):
+		std::vector<std::string> GetTextArray(const char* name) const;
+		std::vector<int> GetIntArray(const char* name) const;
+		std::vector<float> GetFloatArray(const char* name) const;
+
+		// Get the number of values for the key:
+		size_t GetCount(const char* name) const;
+
 		// Set the associated value for the key:
 		void Set(const char* name, bool value);
 		void Set(const char* name, int value);
@@ -31,6 +40,11 @@ namespace wi::config
 		void Set(const char* name, float value);
 		void Set(const char* name, const char* value);
 		void Set(const char* name, const std::string& value);
+
+		// Set multiple values for the key:
+		void Set(const char* name, const std::vector<std::string>& values);
+		void Set(const char* name, const std::vector<int>& values);
+		void Set(const char* name, const std::vector<float>& values);
 
 		std::unordered_map<std::string, std::string>::iterator begin() { return values.begin(); }
 		std::unordered_map<std::string, std::string>::const_iterator begin() const { return values.begin(); }
@@ -68,5 +82,6 @@ namespace wi::config
 			std::string comment;
 		};
 		std::vector<Line> opened_order;
+		std::mutex locker;
 	};
 }

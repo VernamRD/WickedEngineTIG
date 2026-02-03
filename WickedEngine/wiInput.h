@@ -139,6 +139,8 @@ namespace wi::input
 		KEYBOARD_BUTTON_INSERT,
 		KEYBOARD_BUTTON_ALT,
 		KEYBOARD_BUTTON_ALTGR,
+		KEYBOARD_BUTTON_LCOMMAND,
+		KEYBOARD_BUTTON_RCOMMAND,
 
 		// must be the last entry
 		BUTTON_ENUM_SIZE
@@ -267,6 +269,9 @@ namespace wi::input
 	// Resets specified cursor to the original:
 	void ResetCursor(CURSOR cursor);
 
+	// Resets all cursors to original:
+	void ResetCursors();
+
 	// Notify the engine's input system that the OS changed the cursor from outside
 	void NotifyCursorChanged();
 
@@ -295,5 +300,8 @@ namespace wi::input
 	};
 	ShortReturnString ButtonToString(BUTTON button, CONTROLLER_PREFERENCE preference = CONTROLLER_PREFERENCE_GENERIC);
 
+
+	void AddMouseScrollEvent(float value);
+	void AddMouseMoveDeltaEvent(XMFLOAT2 value);
 };
 

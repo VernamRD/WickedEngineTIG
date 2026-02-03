@@ -23,10 +23,7 @@
 //	We init null descriptors for bindless index = 0 for access safety
 //	Because shader compiler sometimes incorrectly loads descriptor outside of safety branch
 //	Note: descriptor index 0 always contains a preinitialized null descriptor
-inline uint descriptor_index(in int x)
-{
-	return max(0, x);
-}
+#define descriptor_index(x) (max(0, x))
 
 #include "ColorSpaceUtility.hlsli"
 #include "PixelPacking_R11G11B10.hlsli"
@@ -203,7 +200,7 @@ float3x3 adjoint(in float4x4 m)
 //	The shader compiler will take the defined name: WICKED_ENGINE_DEFAULT_ROOTSIGNATURE and use it as root signature
 //	If you wish to specify custom root signature, make sure that this define is not available
 //		(for example: not including this file, or using #undef WICKED_ENGINE_DEFAULT_ROOTSIGNATURE)
-#ifdef __hlsl_dx_compiler
+#if defined(__hlsl_dx_compiler) && !defined(__spirv__)
 #if __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6
 // This version uses the newer HLSL6.6+ feature where heap can be indexed instead of dummy descriptor tables:
 #define WICKED_ENGINE_DEFAULT_ROOTSIGNATURE \
@@ -336,20 +333,20 @@ SamplerComparisonState sampler_cmp_depth : register(s109);
 
 // Direct heap indexing compatibility functions for HLSL6.6+:
 //	Note: on PS5 this feature is implemented in the preincluded HLSL_to_PSSL.h file
-#if defined(__hlsl_dx_compiler) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6
+#if defined(__hlsl_dx_compiler) && !defined(__spirv__) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6
 template<typename T>
 struct BindlessResource
 {
-	T operator[](uint index) { return T(ResourceDescriptorHeap[index]); }
+	T operator[](uint index) { return (T)ResourceDescriptorHeap[index]; }
 };
 template<>
 struct BindlessResource<SamplerState>
 {
-	SamplerState operator[](uint index) { return SamplerState(SamplerDescriptorHeap[index]); }
+	SamplerState operator[](uint index) { return (SamplerState)SamplerDescriptorHeap[index]; }
 };
-#endif // defined(__hlsl_dx_compiler) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6
+#endif // defined(__hlsl_dx_compiler) && !defined(__spirv__) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6
 
-#if defined(__PSSL__) || (defined(__hlsl_dx_compiler) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6)
+#if defined(__PSSL__) || (defined(__hlsl_dx_compiler) && !defined(__spirv__) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6)
 static const BindlessResource<SamplerState> bindless_samplers;
 static const BindlessResource<Texture2D> bindless_textures;
 static const BindlessResource<ByteAddressBuffer> bindless_buffers;
@@ -406,14 +403,8 @@ static const BindlessResource<RaytracingAccelerationStructure> bindless_accelera
 //	Note that HLSL register space declaration was not working correctly with overlapped spaces,
 //	But vk::binding works correctly in this case.
 //	HLSL register space declaration is working well with Vulkan when spaces are not overlapping.
-static const uint DESCRIPTOR_SET_BINDLESS_STORAGE_BUFFER = 1;
-static const uint DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER = 2;
-static const uint DESCRIPTOR_SET_BINDLESS_SAMPLER = 3;
-static const uint DESCRIPTOR_SET_BINDLESS_SAMPLED_IMAGE = 4;
-static const uint DESCRIPTOR_SET_BINDLESS_STORAGE_IMAGE = 5;
-static const uint DESCRIPTOR_SET_BINDLESS_STORAGE_TEXEL_BUFFER = 6;
-static const uint DESCRIPTOR_SET_BINDLESS_ACCELERATION_STRUCTURE = 7;
-
+//	These values are provided from shader compiler with defines
+[[vk::binding(0, DESCRIPTOR_SET_BINDLESS_SAMPLER)]] SamplerState bindless_samplers[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_STORAGE_BUFFER)]] ByteAddressBuffer bindless_buffers[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER)]] Buffer<uint> bindless_buffers_uint[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER)]] Buffer<uint2> bindless_buffers_uint2[];
@@ -427,7 +418,6 @@ static const uint DESCRIPTOR_SET_BINDLESS_ACCELERATION_STRUCTURE = 7;
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER)]] Buffer<half2> bindless_buffers_half2[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER)]] Buffer<half3> bindless_buffers_half3[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_UNIFORM_TEXEL_BUFFER)]] Buffer<half4> bindless_buffers_half4[];
-[[vk::binding(0, DESCRIPTOR_SET_BINDLESS_SAMPLER)]] SamplerState bindless_samplers[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_SAMPLED_IMAGE)]] Texture2D bindless_textures[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_SAMPLED_IMAGE)]] Texture2DArray bindless_textures2DArray[];
 [[vk::binding(0, DESCRIPTOR_SET_BINDLESS_SAMPLED_IMAGE)]] Texture2DArray<half4> bindless_textures2DArray_half4[];
@@ -519,7 +509,7 @@ RWTexture2D<uint4> bindless_rwtextures_uint4[] : register(space115);
 
 #include "ShaderInterop_Renderer.h"
 
-#if defined(__PSSL__) || (defined(__hlsl_dx_compiler) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6)
+#if defined(__PSSL__) || (defined(__hlsl_dx_compiler) && !defined(__spirv__) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6)
 static const BindlessResource<StructuredBuffer<ShaderMeshInstance> > bindless_structured_meshinstance;
 static const BindlessResource<StructuredBuffer<ShaderGeometry> > bindless_structured_geometry;
 static const BindlessResource<StructuredBuffer<ShaderMeshlet> > bindless_structured_meshlet;
@@ -549,7 +539,7 @@ StructuredBuffer<ShaderMaterial> bindless_structured_material[] : register(space
 StructuredBuffer<uint> bindless_structured_uint[] : register(space206);
 StructuredBuffer<ShaderTerrainChunk> bindless_structured_terrain_chunks[] : register(space207);
 StructuredBuffer<DDGIProbe> bindless_structured_ddi_probes[] : register(space208);
-#endif // __spirv__
+#endif // defined(__PSSL__) || (defined(__hlsl_dx_compiler) && !defined(__spirv__) && __SHADER_TARGET_MAJOR >= 6 && __SHADER_TARGET_MINOR >= 6)
 
 // Note: these are macros, the SPIRV compilation is a LOT slower and uses a LOT more memory when functions return large structs, issue: https://github.com/microsoft/DirectXShaderCompiler/issues/7493
 #define GetFrame() (g_xFrame)
@@ -710,7 +700,7 @@ struct PrimitiveID
 		ShaderMeshInstance inst = load_instance(instanceIndex);
 		ShaderGeometry geometry = load_geometry(inst.geometryOffset + subsetIndex);
 		[branch]
-		if (maybe_clustered && geometry.vb_clu >= 0)
+		if (maybe_clustered && geometry.vb_clu >= 0 && geometry.tessellation_factor == 0)
 		{
 			const uint clusterID = primitiveIndex >> 7u;
 			const uint triangleID = primitiveIndex & 0x7F;
@@ -1012,11 +1002,7 @@ inline void draw_line(float3 a, float3 b, float4 color = 1)
 	debugline.posB = float4(b, 1);
 	debugline.colorA = color;
 	debugline.colorB = color;
-#ifdef __PSSL__
-	indirect_debug_buffer.TypedStore<DebugLine>(sizeof(IndirectDrawArgsInstanced) + sizeof(DebugLine) * prevCount / 2, debugline);
-#else
 	indirect_debug_buffer.Store<DebugLine>(sizeof(IndirectDrawArgsInstanced) + sizeof(DebugLine) * prevCount / 2, debugline);
-#endif // __PSSL__
 }
 inline void draw_point(float3 pos, float size = 1, float4 color = 1)
 {

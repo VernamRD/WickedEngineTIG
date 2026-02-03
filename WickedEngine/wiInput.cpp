@@ -9,19 +9,47 @@
 #include "wiColor.h"
 #include "wiTimer.h"
 
+#include "Utility/win32ico.h"
+
 #include <algorithm>
 #include <map>
 #include <atomic>
 #include <thread>
+#include <deque>
 
 #ifdef SDL2
 #include <SDL2/SDL.h>
-#include "Utility/win32ico.h"
 #endif // SDL2
 
 #ifdef PLATFORM_PS5
 #include "wiInput_PS5.h"
 #endif // PLATFORM_PS5
+
+#ifdef __APPLE__
+#include "wiInput_Apple.h"
+#include <ApplicationServices/ApplicationServices.h>
+#include <Carbon/Carbon.h>
+namespace wi::input::apple
+{
+bool isLeftMouseButtonPressed()
+{
+	return CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft) != 0;
+}
+bool isRightMouseButtonPressed()
+{
+	return CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonRight) != 0;
+}
+bool isMiddleMouseButtonPressed()
+{
+	return CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonCenter) != 0;
+}
+bool IsKeyDown(CGKeyCode keyCode)
+{
+	return CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, keyCode) != 0;
+}
+}
+using namespace wi::input::apple;
+#endif // __APPLE__
 
 namespace wi::input
 {
@@ -45,6 +73,8 @@ namespace wi::input
 	XMFLOAT2 doubleclick_prevpos = XMFLOAT2(0, 0);
 	CURSOR cursor_current = CURSOR_COUNT; // something that's not default, because at least once code should change it to default
 	CURSOR cursor_next = CURSOR_DEFAULT;
+	std::deque<float> mouse_scroll_events;
+	std::deque<XMFLOAT2> mouse_move_events;
 
 #ifdef _WIN32
 	static const HCURSOR cursor_table_original[] = {
@@ -78,6 +108,11 @@ namespace wi::input
 	static SDL_Cursor* cursor_table[arraysize(cursor_table_original)] = {};
 #endif // SDL2
 
+#ifdef __APPLE__
+	static void* cursor_table_original[CURSOR_COUNT] = {};
+	static void* cursor_table[arraysize(cursor_table_original)] = {};
+#endif // __APPLE__
+
 	const KeyboardState& GetKeyboardState() { return keyboard; }
 	const MouseState& GetMouseState() { return mouse; }
 
@@ -107,6 +142,7 @@ namespace wi::input
 			RAWINPUT,
 			SDLINPUT,
 			PS5,
+			APPLE,
 		};
 		DeviceType deviceType;
 		int deviceIndex;
@@ -125,6 +161,11 @@ namespace wi::input
 #ifdef PLATFORM_PS5
 		wi::input::ps5::Initialize();
 #endif // PLATFORM_PS5
+		
+#ifdef __APPLE__
+		wi::input::apple::Initialize();
+		wi::apple::CursorInit(cursor_table_original);
+#endif // __APPLE__
 
 		for (int i = 0; i < arraysize(cursor_table); ++i)
 		{
@@ -169,11 +210,29 @@ namespace wi::input
 		ScreenToClient(window, &p);
 		mouse.position.x = (float)p.x;
 		mouse.position.y = (float)p.y;
-
+#elif defined(__APPLE__)
+		mouse = {};
+		mouse.position = wi::apple::GetMousePositionInWindow(window);
+		mouse.left_button_press = isLeftMouseButtonPressed();
+		mouse.right_button_press = isRightMouseButtonPressed();
+		mouse.middle_button_press = isMiddleMouseButtonPressed();
 #elif defined(SDL2)
 		wi::input::sdlinput::GetMouseState(&mouse);
 		wi::input::sdlinput::GetKeyboardState(&keyboard);
 #endif
+		
+		for (auto& x : mouse_move_events)
+		{
+			mouse.delta_position.x += x.x;
+			mouse.delta_position.y += x.y;
+		}
+		mouse_move_events.clear();
+		
+		for (auto& x : mouse_scroll_events)
+		{
+			mouse.delta_wheel += x;
+		}
+		mouse_scroll_events.clear();
 
 		if (pen_override)
 		{
@@ -280,6 +339,39 @@ namespace wi::input
 			}
 		}
 
+#ifdef __APPLE__
+		// Check if low-level Apple controller is not registered for playerindex slot and register:
+		for (int i = 0; i < wi::input::apple::GetMaxControllerCount(); ++i)
+		{
+			if (wi::input::apple::GetControllerState(nullptr, i))
+			{
+				int slot = -1;
+				for (int j = 0; j < (int)controllers.size(); ++j)
+				{
+					if (slot < 0 && controllers[j].deviceType == Controller::DISCONNECTED)
+					{
+						// take the first disconnected slot
+						slot = j;
+					}
+					if (controllers[j].deviceType == Controller::APPLE && controllers[j].deviceIndex == i)
+					{
+						// it is already registered to this slot
+						slot = j;
+						break;
+					}
+				}
+				if (slot == -1)
+				{
+					// no disconnected slot was found, and it was not registered
+					slot = (int)controllers.size();
+					controllers.emplace_back();
+				}
+				controllers[slot].deviceType = Controller::APPLE;
+				controllers[slot].deviceIndex = i;
+			}
+		}
+#endif // __APPLE__
+
 #ifdef PLATFORM_PS5
 		// Check if low-level PS5 controller is not registered for playerindex slot and register:
 		for (int i = 0; i < wi::input::ps5::GetMaxControllerCount(); ++i)
@@ -332,6 +424,11 @@ namespace wi::input
 #ifdef PLATFORM_PS5
 					connected = wi::input::ps5::GetControllerState(&controller.state, controller.deviceIndex);
 #endif // PLATFORM_PS5
+					break;
+				case Controller::APPLE:
+#ifdef __APPLE__
+					connected = wi::input::apple::GetControllerState(&controller.state, controller.deviceIndex);
+#endif // __APPLE__
 					break;
 				case Controller::DISCONNECTED:
 					connected = false;
@@ -387,14 +484,20 @@ namespace wi::input
 		}
 
 		// Cursor update:
-		if(cursor_next != cursor_current || cursor_next != CURSOR_DEFAULT)
+		if (cursor_next != cursor_current || cursor_next != CURSOR_DEFAULT)
 		{
+			if (cursor_next >= arraysize(cursor_table))
+			{
+				cursor_next = CURSOR_DEFAULT;
+			}
+			auto cursorhandle = cursor_table[cursor_next] ? cursor_table[cursor_next] : cursor_table[CURSOR_DEFAULT];
+			
 #ifdef PLATFORM_WINDOWS_DESKTOP
-			::SetCursor(cursor_table[cursor_next]);
-#endif // PLATFORM_WINDOWS_DESKTOP
-
-#ifdef SDL2
-			SDL_SetCursor(cursor_table[cursor_next] ? cursor_table[cursor_next] : cursor_table[CURSOR_DEFAULT]);
+			::SetCursor(cursorhandle);
+#elif defined(__APPLE__)
+			wi::apple::CursorSet(cursorhandle);
+#elif defined(SDL2)
+			SDL_SetCursor(cursorhandle);
 #endif // SDL2
 
 			cursor_current = cursor_next;
@@ -469,6 +572,7 @@ namespace wi::input
 			}
 
 			uint16_t keycode = (uint16_t)button;
+			constexpr uint16_t unknown = 65535;
 
 			switch (button)
 			{
@@ -633,10 +737,278 @@ namespace wi::input
 				keycode = VK_RMENU;
 				break;
 #endif // _WIN32
+					
+#ifdef __APPLE__
+			case wi::input::KEYBOARD_BUTTON_UP:
+				keycode = kVK_UpArrow;
+				break;
+			case wi::input::KEYBOARD_BUTTON_DOWN:
+				keycode = kVK_DownArrow;
+				break;
+			case wi::input::KEYBOARD_BUTTON_LEFT:
+				keycode = kVK_LeftArrow;
+				break;
+			case wi::input::KEYBOARD_BUTTON_RIGHT:
+				keycode = kVK_RightArrow;
+				break;
+			case wi::input::KEYBOARD_BUTTON_SPACE:
+				keycode = kVK_Space;
+				break;
+			case wi::input::KEYBOARD_BUTTON_RSHIFT:
+				keycode = kVK_RightShift;
+				break;
+			case wi::input::KEYBOARD_BUTTON_LSHIFT:
+				keycode = kVK_Shift;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F1:
+				keycode = kVK_F1;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F2:
+				keycode = kVK_F2;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F3:
+				keycode = kVK_F3;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F4:
+				keycode = kVK_F4;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F5:
+				keycode = kVK_F5;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F6:
+				keycode = kVK_F6;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F7:
+				keycode = kVK_F7;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F8:
+				keycode = kVK_F8;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F9:
+				keycode = kVK_F9;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F10:
+				keycode = kVK_F10;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F11:
+				keycode = kVK_F11;
+				break;
+			case wi::input::KEYBOARD_BUTTON_F12:
+				keycode = kVK_F12;
+				break;
+			case wi::input::KEYBOARD_BUTTON_ENTER:
+				keycode = kVK_Return;
+				break;
+			case wi::input::KEYBOARD_BUTTON_ESCAPE:
+				keycode = kVK_Escape;
+				break;
+			case wi::input::KEYBOARD_BUTTON_HOME:
+				keycode = kVK_Home;
+				break;
+			case wi::input::KEYBOARD_BUTTON_LCONTROL:
+				keycode = kVK_Control;
+				break;
+			case wi::input::KEYBOARD_BUTTON_RCONTROL:
+				keycode = kVK_RightControl;
+				break;
+			case wi::input::KEYBOARD_BUTTON_LCOMMAND:
+				keycode = kVK_Command;
+				break;
+			case wi::input::KEYBOARD_BUTTON_RCOMMAND:
+				keycode = kVK_RightCommand;
+				break;
+			case wi::input::KEYBOARD_BUTTON_INSERT:
+				keycode = unknown;
+				break;
+			case wi::input::KEYBOARD_BUTTON_DELETE:
+				keycode = kVK_ForwardDelete;
+				break;
+			case wi::input::KEYBOARD_BUTTON_BACKSPACE:
+				keycode = kVK_Delete;
+				break;
+			case wi::input::KEYBOARD_BUTTON_PAGEDOWN:
+				keycode = kVK_PageDown;
+				break;
+			case wi::input::KEYBOARD_BUTTON_PAGEUP:
+				keycode = kVK_PageUp;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD0:
+				keycode = kVK_ANSI_Keypad0;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD1:
+				keycode = kVK_ANSI_Keypad1;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD2:
+				keycode = kVK_ANSI_Keypad2;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD3:
+				keycode = kVK_ANSI_Keypad3;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD4:
+				keycode = kVK_ANSI_Keypad4;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD5:
+				keycode = kVK_ANSI_Keypad5;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD6:
+				keycode = kVK_ANSI_Keypad6;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD7:
+				keycode = kVK_ANSI_Keypad7;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD8:
+				keycode = kVK_ANSI_Keypad8;
+				break;
+			case KEYBOARD_BUTTON_NUMPAD9:
+				keycode = kVK_ANSI_Keypad9;
+				break;
+			case KEYBOARD_BUTTON_MULTIPLY:
+				keycode = kVK_ANSI_KeypadMultiply;
+				break;
+			case KEYBOARD_BUTTON_ADD:
+				keycode = kVK_ANSI_KeypadPlus;
+				break;
+			case KEYBOARD_BUTTON_SEPARATOR:
+				keycode = unknown;
+				break;
+			case KEYBOARD_BUTTON_SUBTRACT:
+				keycode = kVK_ANSI_KeypadMinus;
+				break;
+			case KEYBOARD_BUTTON_DECIMAL:
+				keycode = kVK_ANSI_KeypadDecimal;
+				break;
+			case KEYBOARD_BUTTON_DIVIDE:
+				keycode = kVK_ANSI_KeypadDivide;
+				break;
+			case KEYBOARD_BUTTON_TAB:
+				keycode = kVK_Tab;
+				break;
+			case KEYBOARD_BUTTON_TILDE:
+				keycode = unknown;
+				break;
+			case KEYBOARD_BUTTON_ALT:
+				keycode = kVK_Option;
+				break;
+			case KEYBOARD_BUTTON_ALTGR:
+				keycode = kVK_RightOption;
+				break;
+			case (BUTTON)'A':
+				keycode = kVK_ANSI_A;
+				break;
+			case (BUTTON)'B':
+				 keycode = kVK_ANSI_B;
+				 break;
+			case (BUTTON)'C':
+				 keycode = kVK_ANSI_C;
+				 break;
+			case (BUTTON)'D':
+				 keycode = kVK_ANSI_D;
+				 break;
+			case (BUTTON)'E':
+				 keycode = kVK_ANSI_E;
+				 break;
+			case (BUTTON)'F':
+				 keycode = kVK_ANSI_F;
+				 break;
+			case (BUTTON)'G':
+				 keycode = kVK_ANSI_G;
+				 break;
+			case (BUTTON)'H':
+				 keycode = kVK_ANSI_H;
+				 break;
+			case (BUTTON)'I':
+				 keycode = kVK_ANSI_I;
+				 break;
+			case (BUTTON)'J':
+				 keycode = kVK_ANSI_J;
+				 break;
+			case (BUTTON)'K':
+				 keycode = kVK_ANSI_K;
+				 break;
+			case (BUTTON)'L':
+				 keycode = kVK_ANSI_L;
+				 break;
+			case (BUTTON)'M':
+				 keycode = kVK_ANSI_M;
+				 break;
+			case (BUTTON)'N':
+				 keycode = kVK_ANSI_N;
+				 break;
+			case (BUTTON)'O':
+				 keycode = kVK_ANSI_O;
+				 break;
+			case (BUTTON)'P':
+				 keycode = kVK_ANSI_P;
+				 break;
+			case (BUTTON)'Q':
+				 keycode = kVK_ANSI_Q;
+				 break;
+			case (BUTTON)'R':
+				 keycode = kVK_ANSI_R;
+				 break;
+			case (BUTTON)'S':
+				 keycode = kVK_ANSI_S;
+				 break;
+			case (BUTTON)'T':
+				 keycode = kVK_ANSI_T;
+				 break;
+			case (BUTTON)'U':
+				 keycode = kVK_ANSI_U;
+				 break;
+			case (BUTTON)'V':
+				 keycode = kVK_ANSI_V;
+				 break;
+			case (BUTTON)'W':
+				 keycode = kVK_ANSI_W;
+				 break;
+			case (BUTTON)'X':
+				 keycode = kVK_ANSI_X;
+				 break;
+			case (BUTTON)'Y':
+				 keycode = kVK_ANSI_Y;
+				 break;
+			case (BUTTON)'Z':
+				 keycode = kVK_ANSI_Z;
+				 break;
+				case (BUTTON)'0':
+				  keycode = kVK_ANSI_0;
+				  break;
+				case (BUTTON)'1':
+				  keycode = kVK_ANSI_1;
+				  break;
+				case (BUTTON)'2':
+				  keycode = kVK_ANSI_2;
+				  break;
+				case (BUTTON)'3':
+				  keycode = kVK_ANSI_3;
+				  break;
+				case (BUTTON)'4':
+				  keycode = kVK_ANSI_4;
+				  break;
+				case (BUTTON)'5':
+				  keycode = kVK_ANSI_5;
+				  break;
+				case (BUTTON)'6':
+				  keycode = kVK_ANSI_6;
+				  break;
+				case (BUTTON)'7':
+				  keycode = kVK_ANSI_7;
+				  break;
+				case (BUTTON)'8':
+				  keycode = kVK_ANSI_8;
+				  break;
+				case (BUTTON)'9':
+				  keycode = kVK_ANSI_9;
+				  break;
+#endif // __APPLE__
+					
+					
 				default: break;
 			}
 #if defined(_WIN32) && !defined(PLATFORM_XBOX)
 			return KEY_DOWN(keycode) || KEY_TOGGLE(keycode);
+#elif defined(__APPLE__)
+			return IsKeyDown(keycode);
 #elif defined(SDL2)
 			return keyboard.buttons[keycode] == 1;
 #endif
@@ -719,6 +1091,8 @@ namespace wi::input
 		p.y = (LONG)(posY);
 		ClientToScreen(hWnd, &p);
 		SetCursorPos(p.x, p.y);
+#elif defined(__APPLE__)
+		wi::apple::SetMousePositionInWindow(window, XMFLOAT2(float(posX), float(posY)));
 #elif defined(SDL2)
 		SDL_WarpMouseInWindow(window, posX, posY);
 #endif // SDL2
@@ -734,6 +1108,8 @@ namespace wi::input
 		{
 			while (ShowCursor(true) < 0) {};
 		}
+#elif defined(__APPLE__)
+		wi::apple::CursorHide(value);
 #elif defined(SDL2)
 		SDL_SetRelativeMouseMode(value ? SDL_TRUE : SDL_FALSE);
 #endif // _WIN32
@@ -797,6 +1173,12 @@ namespace wi::input
 			{
 				wi::input::sdlinput::SetControllerFeedback(data, controller.deviceIndex);
 			}
+#ifdef __APPLE__
+			else if (controller.deviceType == Controller::APPLE)
+			{
+				wi::input::apple::SetControllerFeedback(data, controller.deviceIndex);
+			}
+#endif // __APPLE__
 #ifdef PLATFORM_PS5
 			else if (controller.deviceType == Controller::PS5)
 			{
@@ -823,32 +1205,32 @@ namespace wi::input
 	}
 
 	void SetCursorFromFile(CURSOR cursor, const char* filename)
-	{
+{
 #ifdef PLATFORM_WINDOWS_DESKTOP
 		wchar_t wfilename[1024] = {};
 		wi::helper::StringConvert(filename, wfilename, arraysize(wfilename));
 		cursor_table[cursor] = LoadCursorFromFile(wfilename);
 #endif // PLATFORM_WINDOWS_DESKTOP
-
-#ifdef SDL2
-		// In SDL extract the raw color data from win32 .CUR file and use SDL to create cursor:
+		
+#if defined(SDL2) || defined(PLATFORM_MACOS)
+		// On other platforms, extract the raw color data from win32 .CUR file and create cursor from that:
 		wi::vector<uint8_t> data;
 		if (wi::helper::FileRead(filename, data))
 		{
 			// Extract only the first image data:
 			ico::ICONDIRENTRY* icondirentry = (ico::ICONDIRENTRY*)(data.data() + sizeof(ico::ICONDIR));
-
+			
 			int hotspotX = icondirentry->wPlanes;
 			int hotspotY = icondirentry->wBitCount;
-
+			
 			uint8_t* pixeldata = (data.data() + icondirentry->dwImageOffset + sizeof(ico::BITMAPINFOHEADER));
-
+			
 			const uint32_t width = icondirentry->bWidth;
 			const uint32_t height = icondirentry->bHeight;
-
+			
 			// Convert BGRA to ARGB and flip vertically
-            wi::vector<wi::Color> colors;
-            colors.reserve(width * height);
+			wi::vector<wi::Color> colors;
+			colors.reserve(width * height);
 			for (uint32_t y = height; y > 0; --y)
 			{
 				uint8_t* src = pixeldata + (y - 1) * width * 4;
@@ -858,27 +1240,31 @@ namespace wi::input
 					src += 4;
 				}
 			}
-
+			
+#ifdef SDL2
 			SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(
-				colors.data(),
-				width,
-				height,
-				4 * 8,
-				4 * width,
-				0x0000ff00,
-				0x00ff0000,
-				0xff000000,
-				0x000000ff
-			);
-
+															colors.data(),
+															width,
+															height,
+															4 * 8,
+															4 * width,
+															0x0000ff00,
+															0x00ff0000,
+															0xff000000,
+															0x000000ff
+															);
+			
 			if (surface != nullptr)
 			{
 				cursor_table[cursor] = SDL_CreateColorCursor(surface, hotspotX, hotspotY);
 				SDL_FreeSurface(surface);
 			}
-		}
+#elif defined(PLATFORM_MACOS)
+			cursor_table[cursor] = wi::apple::CreateCursorFromARGB8ImageData(colors.data(), width, height, hotspotX, hotspotY);
 #endif // SDL2
-
+		}
+#endif // defined(SDL2) || defined(PLATFORM_MACOS)
+		
 		// refresh in case we set the current one:
 		cursor_next = cursor_current;
 		cursor_current = CURSOR_COUNT;
@@ -891,6 +1277,14 @@ namespace wi::input
 		// refresh in case we set the current one:
 		cursor_next = cursor_current;
 		cursor_current = CURSOR_COUNT;
+	}
+
+	void ResetCursors()
+	{
+		for (int i = 0; i < CURSOR_COUNT; ++i)
+		{
+			ResetCursor(CURSOR(i));
+		}
 	}
 
 	void NotifyCursorChanged()
@@ -1287,4 +1681,14 @@ namespace wi::input
 		return "";
 	}
 
+
+	void AddMouseScrollEvent(float value)
+	{
+		mouse_scroll_events.push_back(value);
+	}
+
+	void AddMouseMoveDeltaEvent(XMFLOAT2 value)
+	{
+		mouse_move_events.push_back(value);
+	}
 }

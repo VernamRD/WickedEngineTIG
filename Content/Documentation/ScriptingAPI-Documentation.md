@@ -1877,6 +1877,18 @@ It inherits functions from RenderPath2D, so it can render a 2D overlay.
 - SetCropBottom(float value) -- Sets cropping from bottom of the screen in logical units
 - GetLastPostProcessRT() : Texture -- returns the last post process render texture
 - SetDistortionOverlay(Texture texture) -- Set a normal map texture as full screen distortion mask
+- SetChromaticAberrationEnabled(bool value)
+- SetChromaticAberrationAmount(float value)
+- SetEyeAdaptionRate(float value)
+- SetEyeAdaptionKey(float value)
+- SetContrast(float value)
+- SetSaturation(float value)
+- SetBrightness(float value)
+- SetLightShaftsFadeSpeed(float value)
+- SetMeshBlendEnabled(bool value)
+- SetOcclusionCullingEnabled(bool value)
+- SetSSGIDepthRejection(float value)
+
 
 ```lua
 FSR2_Preset = {
@@ -2020,6 +2032,7 @@ Query input devices
 - SetCursor(int cursor)	-- sets the current cursor type. Values can be of the cursor values, see below
 - SetCursorFromFile(int cursor, string filename)	-- sets the specified cursor type to an image from a cursor file
 - ResetCursor(int cursor)	-- resets the specified cursor to the default one
+- ResetCursors()	-- resets all cursors to the defaults
 
 #### ControllerFeedback
 Describes controller feedback such as touch and LED color which can be replayed on a controller

@@ -44,6 +44,10 @@ namespace wi
 
 		wi::graphics::Texture rendertargetPreHDR10;
 
+		uint32_t renderWidth = 0;
+		uint32_t renderHeight = 0;
+		bool isFullScreen = false;
+
 	public:
 		virtual ~Application() = default;
 
@@ -91,9 +95,15 @@ namespace wi
 		virtual void Exit();
 
 		// You need to call this before calling Run() or Initialize() if you want to render
-		void SetWindow(wi::platform::window_type);
+		void SetWindow(wi::platform::window_type window);
+
+		// Set a fixed render resolution independent of window size (for borderless fullscreen)
+		// Pass 0,0 to clear the fixed resolution and use window size
+		void SetRenderResolution(uint32_t width, uint32_t height);
+		void GetRenderResolution(uint32_t& width, uint32_t& height) const;
 
 		void SetFullScreen(bool fullscreen);
+		bool IsFullScreen() const { return isFullScreen; }
 
 		struct InfoDisplayer
 		{
@@ -123,6 +133,8 @@ namespace wi
 			int size = 16;
 			// display default color grading helper texture in top left corner of the screen
 			bool colorgrading_helper = false;
+			// mouse position and button informations
+			bool mouse_info = false;
 			// rect to specify where to render the information
 			wi::graphics::Rect rect;
 		};

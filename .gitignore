@@ -223,12 +223,17 @@ wiShaderdump.h
 *.a
 *.elf
 *.prx
+*.agsd
 
 # clangd
 .clangd
 compile_commands.json
 
+# MAC:
+xcuserdata/
+
 # Others
 log.txt
 wicked-editor-crash-log.txt
 pso_cache_vulkan
+.DS_Store

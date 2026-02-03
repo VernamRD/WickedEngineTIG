@@ -164,7 +164,7 @@ namespace wi::terrain
 		}
 		inline bool IsValid() const
 		{
-			return tile_pool.IsValid();
+			return maps[0].texture.IsValid();
 		}
 	};
 
@@ -301,6 +301,14 @@ namespace wi::terrain
 		wi::graphics::Sampler sampler;
 		VirtualTextureAtlas atlas;
 
+		struct NoSparseCopy
+		{
+			const wi::graphics::Texture* texture_src = nullptr;
+			const wi::graphics::Texture* texture_dst = nullptr;
+			wi::graphics::Box srcbox = {};
+		};
+		mutable wi::vector<NoSparseCopy> nosparse_copies;
+
 		wi::graphics::GPUBuffer chunk_buffer;
 		int chunk_buffer_range = 3; // how many chunks to upload to GPU in X and Z directions
 
@@ -345,6 +353,8 @@ namespace wi::terrain
 		void Generation_Update(const wi::scene::CameraComponent& camera);
 		// Tells the generation thread that it should be cancelled and blocks until that is confirmed
 		void Generation_Cancel();
+		// Check if the terrain generation is currently busy (running in background)
+		bool IsGenerationBusy() const;
 		// Creates the textures for a chunk data
 		void CreateChunkRegionTexture(ChunkData& chunk_data);
 

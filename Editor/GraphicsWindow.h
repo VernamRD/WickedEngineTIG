@@ -66,12 +66,16 @@ public:
 	wi::gui::Slider aoPowerSlider;
 	wi::gui::Slider aoRangeSlider;
 	wi::gui::Slider aoSampleCountSlider;
+	wi::gui::CheckBox reflectionsCheckBox;
 	wi::gui::CheckBox ssrCheckBox;
+	wi::gui::Slider ssrQualitySlider;
 	wi::gui::CheckBox raytracedReflectionsCheckBox;
 	wi::gui::Slider reflectionsRoughnessCutoffSlider;
 	wi::gui::Slider raytracedReflectionsRangeSlider;
+	wi::gui::Slider raytracedReflectionsQualitySlider;
 	wi::gui::CheckBox raytracedDiffuseCheckBox;
 	wi::gui::Slider raytracedDiffuseRangeSlider;
+	wi::gui::Slider raytracedDiffuseQualitySlider;
 	wi::gui::CheckBox ssgiCheckBox;
 	wi::gui::Slider ssgiDepthRejectionSlider;
 	wi::gui::CheckBox screenSpaceShadowsCheckBox;

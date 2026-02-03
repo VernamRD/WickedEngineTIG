@@ -27,6 +27,9 @@
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #define __ID3D12Device1_INTERFACE_DEFINED__
+#ifdef PLATFORM_XBOX
+#define D3D12MA_OPTIONS16_SUPPORTED 0
+#endif // PLATFORM_XBOX
 #include "Utility/D3D12MemAlloc.h"
 
 #include <deque>
@@ -116,8 +119,8 @@ namespace wi::graphics
 		};
 		mutable CopyAllocator copyAllocator;
 
-		Microsoft::WRL::ComPtr<ID3D12Fence> frame_fence_cpu[BUFFERCOUNT][QUEUE_COUNT];
-		Microsoft::WRL::ComPtr<ID3D12Fence> frame_fence_gpu[BUFFERCOUNT][QUEUE_COUNT];
+		uint64_t frame_fence_values[BUFFERCOUNT] = {};
+		Microsoft::WRL::ComPtr<ID3D12Fence> frame_fence[BUFFERCOUNT][QUEUE_COUNT];
 
 		struct DescriptorBinder
 		{
@@ -179,7 +182,7 @@ namespace wi::graphics
 			};
 			wi::vector<Discard> discards;
 			D3D_PRIMITIVE_TOPOLOGY prev_pt = {};
-			wi::vector<std::pair<PipelineHash, Microsoft::WRL::ComPtr<ID3D12PipelineState>>> pipelines_worker;
+			wi::vector<std::pair<PipelineHash, PipelineState>> pipelines_worker;
 			PipelineHash prev_pipeline_hash = {};
 			const PipelineState* active_pso = {};
 			const Shader* active_cs = {};
@@ -264,7 +267,8 @@ namespace wi::graphics
 				return (ID3D12VideoDecodeCommandList*)commandLists[queue].Get();
 			}
 		};
-		wi::vector<std::unique_ptr<CommandList_DX12>> commandlists;
+		wi::allocator::BlockAllocator<CommandList_DX12, 64> cmd_allocator;
+		wi::vector<CommandList_DX12*> commandlists;
 		uint32_t cmd_count = 0;
 		wi::SpinLock cmd_locker;
 
@@ -274,7 +278,7 @@ namespace wi::graphics
 			return *(CommandList_DX12*)cmd.internal_state;
 		}
 
-		wi::unordered_map<PipelineHash, Microsoft::WRL::ComPtr<ID3D12PipelineState>> pipelines_global;
+		wi::unordered_map<PipelineHash, PipelineState> pipelines_global;
 
 		void pso_validate(CommandList cmd);
 
@@ -334,7 +338,7 @@ namespace wi::graphics
 
 		uint32_t GetMinOffsetAlignment(const GPUBufferDesc* desc) const override
 		{
-			uint32_t alignment = 1u;
+			uint32_t alignment = std::max(1u, desc->alignment);
 			if (has_flag(desc->bind_flags, BindFlag::CONSTANT_BUFFER))
 			{
 				alignment = std::max(alignment, (uint32_t)D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);

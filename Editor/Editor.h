@@ -26,6 +26,7 @@ public:
 	wi::gui::Button translateButton;
 	wi::gui::Button rotateButton;
 	wi::gui::Button scaleButton;
+	wi::gui::Button localGlobalButton;
 
 	wi::gui::Button physicsButton;
 
@@ -112,6 +113,16 @@ public:
 	XMFLOAT4 originalMouse = XMFLOAT4(0, 0, 0, 0);
 	XMFLOAT4 currentMouse = XMFLOAT4(0, 0, 0, 0);
 
+	bool cinema_mode_saved_debugEnvProbes = false;
+	bool cinema_mode_saved_debugCameras = false;
+	bool cinema_mode_saved_debugColliders = false;
+	bool cinema_mode_saved_debugEmitters = false;
+	bool cinema_mode_saved_debugForceFields = false;
+	bool cinema_mode_saved_debugBoneLines = false;
+	bool cinema_mode_saved_debugPartitionTree = false;
+	bool cinema_mode_saved_debugSprings = false;
+	bool cinema_mode_saved_gridHelper = false;
+
 	enum EDITORSTENCILREF
 	{
 		EDITORSTENCILREF_CLEAR = 0x00,
@@ -156,6 +167,7 @@ public:
 	wi::unordered_map<wi::ecs::Entity, wi::primitive::Capsule> bone_picking_items;
 
 	void UpdateDynamicWidgets();
+	void UpdateLocalGlobalButton();
 
 	wi::Archive clipboard;
 
@@ -257,6 +269,8 @@ public:
 
 	wi::jobsystem::context loadmodel_workload;
 	wi::SpriteFont loadmodel_font;
+	wi::SpriteFont terrain_generation_font;
+	float terrain_generation_font_timeout = 0;
 
 	wi::TrailRenderer spline_renderer;
 };

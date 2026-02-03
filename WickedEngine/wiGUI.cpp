@@ -132,7 +132,7 @@ namespace wi::gui
 		auto range_cpu = wi::profiler::BeginRangeCPU("GUI Render");
 		auto range_gpu = wi::profiler::BeginRangeGPU("GUI Render", cmd);
 
-		Rect scissorRect;
+		wi::graphics::Rect scissorRect;
 		scissorRect.bottom = (int32_t)(canvas.GetPhysicalHeight());
 		scissorRect.left = (int32_t)(0);
 		scissorRect.right = (int32_t)(canvas.GetPhysicalWidth());
@@ -744,9 +744,9 @@ namespace wi::gui
 			ApplyTransform();
 		}
 	}
-	void Widget::ApplyScissor(const wi::Canvas& canvas, const Rect rect, CommandList cmd, bool constrain_to_parent) const
+	void Widget::ApplyScissor(const wi::Canvas& canvas, const wi::graphics::Rect rect, CommandList cmd, bool constrain_to_parent) const
 	{
-		Rect scissor = rect;
+		wi::graphics::Rect scissor = rect;
 
 		if (constrain_to_parent && parent != nullptr)
 		{
@@ -1590,6 +1590,7 @@ namespace wi::gui
 	int caret_begin = 0;
 	int caret_delay = 0;
 	bool input_updated = false;
+	bool doubleclick_select = false;
 	wi::Timer caret_timer;
 	void TextInputField::Create(const std::string& name)
 	{
@@ -1698,6 +1699,10 @@ namespace wi::gui
 
 			if (state == ACTIVE)
 			{
+				if (!wi::input::Down(wi::input::MOUSE_BUTTON_LEFT))
+				{
+					doubleclick_select = false;
+				}
 				if (wi::input::Press(wi::input::KEYBOARD_BUTTON_ENTER))
 				{
 					// accept input...
@@ -1734,10 +1739,13 @@ namespace wi::gui
 					}
 					caret_timer.record();
 				}
-				else if (wi::input::Press(wi::input::KEYBOARD_BUTTON_RIGHT) && caret_pos < font_input.GetText().size())
+				else if (wi::input::Press(wi::input::KEYBOARD_BUTTON_RIGHT))
 				{
 					// caret repositioning right:
-					caret_pos++;
+					if (caret_pos < font_input.GetText().size())
+					{
+						caret_pos++;
+					}
 					if (!wi::input::Down(wi::input::BUTTON::KEYBOARD_BUTTON_LSHIFT) && !wi::input::Down(wi::input::BUTTON::KEYBOARD_BUTTON_RSHIFT))
 					{
 						caret_begin = caret_pos;
@@ -1748,9 +1756,17 @@ namespace wi::gui
 				{
 					// cancel input
 					font_input.text.clear();
-					Deactivate();
+					typing_active = false;
+					state = IDLE;
 				}
-				else if (wi::input::Down(wi::input::MOUSE_BUTTON_LEFT))
+				else if (leftButtonClicked && intersectsPointer && wi::input::IsDoubleClicked())
+				{
+					caret_begin = 0;
+					caret_pos = (int)font_input.GetText().size();
+					caret_timer.record();
+					doubleclick_select = true;
+				}
+				else if (wi::input::Down(wi::input::MOUSE_BUTTON_LEFT) && !doubleclick_select)
 				{
 					// caret repositioning by mouse click:
 					caret_timer.record();
@@ -1789,7 +1805,9 @@ namespace wi::gui
 			if (leftButtonClicked && state == FOCUS)
 			{
 				// activate
-				SetAsActive();
+				const bool select_all = intersectsPointer && wi::input::IsDoubleClicked();
+				SetAsActive(select_all);
+				doubleclick_select = select_all;
 			}
 		}
 
@@ -1978,7 +1996,11 @@ namespace wi::gui
 				caret_pos = offset;
 			}
 			int num = 0;
+#ifdef __APPLE__
+			if (wi::input::Down(wi::input::KEYBOARD_BUTTON_LCOMMAND) || wi::input::Down(wi::input::KEYBOARD_BUTTON_RCOMMAND))
+#else
 			if (wi::input::Down(wi::input::KEYBOARD_BUTTON_LCONTROL) || wi::input::Down(wi::input::KEYBOARD_BUTTON_RCONTROL))
+#endif // __APPLE__
 			{
 				if (wi::input::Down((wi::input::BUTTON)'V'))
 				{
@@ -2112,20 +2134,23 @@ namespace wi::gui
 		valueInputField.SetShadowRadius(0);
 		valueInputField.SetTooltip("Enter number to modify value even outside slider limits. Other inputs:\n - reset : reset slider to initial state.\n - FLT_MAX : float max value\n - -FLT_MAX : negative float max value.");
 		valueInputField.SetValue(end);
-		valueInputField.OnInputAccepted([this, start, end, defaultValue](const EventArgs& args) {
+		valueInputField.OnInputAccepted([this, start, end, defaultValue](EventArgs args) {
 			if (args.sValue.compare("reset") == 0)
 			{
 				this->value = defaultValue;
 				this->start = start;
 				this->end = end;
+				args.fValue = this->value;
 			}
 			else if (args.sValue.compare("FLT_MAX") == 0)
 			{
 				this->value = FLT_MAX;
+				args.fValue = this->value;
 			}
 			else if (args.sValue.compare("-FLT_MAX") == 0)
 			{
 				this->value = -FLT_MAX;
+				args.fValue = this->value;
 			}
 			else
 			{
@@ -2134,7 +2159,7 @@ namespace wi::gui
 				this->end = std::max(this->end, args.fValue);
 			}
 			onSlide(args);
-			});
+		});
 
 		for (int i = IDLE; i < WIDGETSTATE_COUNT; ++i)
 		{
@@ -3054,7 +3079,7 @@ namespace wi::gui
 		if (state == ACTIVE)
 		{
 			{
-				Rect fullscissorRect;
+				wi::graphics::Rect fullscissorRect;
 				fullscissorRect.bottom = (int32_t)(canvas.GetPhysicalHeight());
 				fullscissorRect.left = (int32_t)(0);
 				fullscissorRect.right = (int32_t)(canvas.GetPhysicalWidth());
@@ -3065,7 +3090,7 @@ namespace wi::gui
 
 			if (HasScrollbar())
 			{
-				Rect rect;
+				wi::graphics::Rect rect;
 				rect.left = int(drop_x + drop_width + 1);
 				rect.right = int(drop_x + drop_width + 1 + scale.y);
 				rect.top = int(translation.y + scale.y + drop_offset);
@@ -3107,7 +3132,7 @@ namespace wi::gui
 				}
 			}
 
-			Rect rect;
+			wi::graphics::Rect rect;
 			rect.left = int(drop_x);
 			rect.right = rect.left + int(drop_width);
 			rect.top = int(translation.y + scale.y + drop_offset);
@@ -5755,7 +5780,7 @@ namespace wi::gui
 		fx.siz = XMFLOAT2(itemlist_box.siz.x, itemlist_box.siz.y);
 		wi::image::Draw(nullptr, fx, cmd);
 
-		Rect rect_without_scrollbar;
+		wi::graphics::Rect rect_without_scrollbar;
 		rect_without_scrollbar.left = (int)itemlist_box.pos.x;
 		rect_without_scrollbar.right = (int)(itemlist_box.pos.x + itemlist_box.siz.x);
 		rect_without_scrollbar.top = (int)itemlist_box.pos.y;
