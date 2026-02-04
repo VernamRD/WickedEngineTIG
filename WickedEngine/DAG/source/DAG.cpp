@@ -138,7 +138,7 @@ namespace wi::compute
         //        }
     }
 
-    bool DAG::AddTask(TaskHandle task)
+    bool DAG::AddTask(const TaskHandle& task)
     {
         m_tasksToCompile.insert(task);
         MarkGraphDirty();
@@ -159,38 +159,43 @@ namespace wi::compute
         if (m_state != EDAGState::MustBeRecompile && m_tasksToCompile.empty()) return true;
 
         // Nodes set which not processed yet
-        std::unordered_set<DAGNodePtr> nodesToCompile;
+        std::unordered_set<DAGNodeRawPtr> nodesToCompile;
 
-        for (auto taskToCompile : m_tasksToCompile)
+        for (const auto& taskToCompile : m_tasksToCompile)
         {
-            DAGNodePtr newNode = std::make_shared<DAG_Node>(taskToCompile);
-            m_nodesByHandle.insert({taskToCompile, newNode});
-            nodesToCompile.insert(newNode);
+            DAGNodePtr newNode = std::make_unique<DAG_Node>(taskToCompile);
+            nodesToCompile.insert(newNode.get());
+            m_nodesByHandle.insert({taskToCompile, std::move(newNode)});
         }
 
         // Try recompile abandoned nodes
-        nodesToCompile.merge(m_abandonedNodes);
-        m_abandonedNodes.clear();
+        if (!m_abandonedTasks.empty()){
+            for(const auto& abandonedTask : m_abandonedTasks){
+                nodesToCompile.insert(GetNode(abandonedTask));    
+            }
+            
+            m_abandonedTasks.clear();    
+        }
 
         executionLayers.clear();
         executionLayers.emplace_back();
-        std::vector<DAGNodePtr>* executionLayer = &executionLayers.back();
-        
+        DAG_Layer* executionLayer = &executionLayers.back();
+
         // All nodes contained in any layer
-        std::unordered_set<DAGNodePtr> layeredTasks;
+        std::unordered_set<DAGNodeRawPtr> layeredTasks;
 
         while (executionLayer)
         {
             GraphIterator graphIterator(*this);
-            
-            std::vector<DAGNodePtr> layerTasks;
+
+            std::vector<DAGNodeRawPtr> layerTasks;
             for (const auto& node : nodesToCompile)
             {
                 graphIterator.IteratePrerequisite(*node,
                     [this, &layeredTasks, &layerTasks](const DAG_Node& node)
                     {
-                        if(layeredTasks.contains(GetNode(node.GetTask()))) return;
-                        
+                        if (layeredTasks.contains(GetNode(node.GetTask()))) return;
+
                         bool bAllPrerequisitesLayered = true;
 
                         for (const auto& prerequisite : node.GetTask().GetPrerequisites())
@@ -205,30 +210,27 @@ namespace wi::compute
                     });
             }
 
-            std::vector<DAGNodePtr> layerNodesVec;
+            std::vector<DAGNodeRawPtr> layerNodesVec;
 
             // Add to layer
             layeredTasks.reserve(layeredTasks.size() + layerTasks.size());
             for (const auto& task : layerTasks)
             {
                 nodesToCompile.erase(task);
-                layerNodesVec.push_back(task);
+                executionLayer->nodes.push_back(task);
                 layeredTasks.insert(task);
             }
-
-            // Assign layer
-            *executionLayer = layerNodesVec;
 
             if (!nodesToCompile.empty())
             {
                 for (auto nodeToCompile : nodesToCompile)
                 {
                     bool bAllPrerequisiteExist = std::ranges::all_of(nodeToCompile->GetTask().GetPrerequisites(),
-                        [this](const TaskHandle& task) { return GetNode(task) != nullptr && !m_abandonedNodes.contains(GetNode(task)); });
+                        [this](const TaskHandle& task) { return GetNode(task) != nullptr && !m_abandonedTasks.contains(task); });
 
                     if (!bAllPrerequisiteExist)
                     {
-                        m_abandonedNodes.insert(nodeToCompile);
+                        m_abandonedTasks.insert(nodeToCompile->GetTask());
                     }
                 }
 
@@ -248,17 +250,17 @@ namespace wi::compute
         return true;
     }
 
-    DAGNodePtr DAG::GetNode(const TaskHandle& handle) { return m_nodesByHandle.contains(handle) ? m_nodesByHandle[handle] : nullptr; }
+    DAGNodeRawPtr DAG::GetNode(const TaskHandle& handle) { return m_nodesByHandle.contains(handle) ? m_nodesByHandle[handle].get() : nullptr; }
 
-    const DAGNodePtr DAG::GetNode(const TaskHandle& handle) const
+    DAGNodeRawPtr DAG::GetNode(const TaskHandle& handle) const
     {
-        return m_nodesByHandle.contains(handle) ? m_nodesByHandle.find(handle)->second : DAGNodePtr();
+        return m_nodesByHandle.contains(handle) ? m_nodesByHandle.find(handle)->second.get() : nullptr;
     }
 
     std::string DAG::DumpExecutionLayersToDot() const
     {
         std::ostringstream oss;
-        
+
         oss << "digraph ExecutionLayers {\n";
         oss << "  rankdir=TB;\n";
         oss << "  node [shape=box, style=rounded];\n";
@@ -278,7 +280,7 @@ namespace wi::compute
             oss << "    color=lightgrey;\n";
             oss << "    style=rounded;\n";
 
-            for (const DAGNodePtr& node : executionLayers[layerIndex])
+            for (const DAGNodeRawPtr& node : executionLayers[layerIndex].nodes)
             {
                 oss << "    \"" << node->GetTask().GetName() << "\";\n";
             }
@@ -291,9 +293,7 @@ namespace wi::compute
         // Невидимые рёбра для вертикального порядка слоёв
         for (size_t i = 0; i + 1 < executionLayers.size(); ++i)
         {
-            oss << "  layer_anchor_" << i
-                << " -> layer_anchor_" << (i + 1)
-                << " [style=invis];\n";
+            oss << "  layer_anchor_" << i << " -> layer_anchor_" << (i + 1) << " [style=invis];\n";
         }
 
         oss << "}\n";

@@ -12,8 +12,8 @@ namespace wi::compute
     class DAG_Node;
     class DAG;
 
-    using DAGNodePtr = std::shared_ptr<DAG_Node>;
-    using DAGNodeWeakPtr = std::weak_ptr<DAG_Node>;
+    using DAGNodePtr = std::unique_ptr<DAG_Node>;
+    using DAGNodeRawPtr = DAG_Node*;
 
     class DAG_Node
     {
@@ -35,6 +35,11 @@ namespace wi::compute
         
         TaskHandle m_task;
     };
+    
+    struct DAG_Layer
+    {
+        std::vector<DAGNodeRawPtr> nodes; 
+    };
 
     enum class EDAGState : uint32_t
     {
@@ -48,13 +53,13 @@ namespace wi::compute
         DAG();
 
         void Initialize();
-        bool AddTask(TaskHandle task);
+        bool AddTask(const TaskHandle& task);
         bool AddTasks(std::initializer_list<TaskHandle> taskList);
         
         bool Compile();
         
-        DAGNodePtr GetNode(const TaskHandle& handle);
-        const DAGNodePtr GetNode(const TaskHandle& handle) const;
+        DAGNodeRawPtr GetNode(const TaskHandle& handle);
+        DAGNodeRawPtr GetNode(const TaskHandle& handle) const;
 
         void MarkGraphDirty() { m_state = EDAGState::MustBeRecompile; }
         EDAGState GetState() { return m_state; }
@@ -65,11 +70,11 @@ namespace wi::compute
         // All nodes
         std::unordered_map<TaskHandle, DAGNodePtr> m_nodesByHandle;
         
-        std::vector<std::vector<DAGNodePtr>> executionLayers;
+        std::vector<DAG_Layer> executionLayers;
         std::unordered_set<TaskHandle> m_tasksToCompile;
 
         // Tasks that have prerequisites but cannot currently reference them
-        std::unordered_set<DAGNodePtr> m_abandonedNodes;
+        std::unordered_set<TaskHandle> m_abandonedTasks;
 
         EDAGState m_state;
     };
