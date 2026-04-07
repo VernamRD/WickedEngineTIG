@@ -32,6 +32,8 @@
 
 #include <memory>
 
+#include <luau/Compiler/include/luacode.h>
+
 namespace wi::lua
 {
 	static constexpr const char* WILUA_ERROR_PREFIX = "[Lua Error] ";
@@ -93,6 +95,15 @@ namespace wi::lua
 		PostErrorMsg(lua_internal().m_luaState);
 	}
 
+	static bool LuauLoad(lua_State* L, const char* chunkname, const char* source, size_t sourceLen)
+	{
+		size_t bytecodeSize = 0;
+		char* bytecode = luau_compile(source, sourceLen, nullptr, &bytecodeSize);
+		int status = luau_load(L, chunkname, bytecode, bytecodeSize, 0);
+		free(bytecode);
+		return status == LUA_OK;
+	}
+
 	uint32_t GeneratePID()
 	{
 		static std::atomic<uint32_t> scriptpid_next{ 0 + 1 };
@@ -106,11 +117,11 @@ namespace wi::lua
 			"	success, co = Internal_runProcess(script_file(), script_pid(), func);"
 			"	return success, co;"
 			"end;"
-			"if _ENV.PROCESSES_DATA[script_pid()] == nil then"
-			"	_ENV.PROCESSES_DATA[script_pid()] = { _INITIALIZED = -1 };"
+			"if PROCESSES_DATA[script_pid()] == nil then"
+			"	PROCESSES_DATA[script_pid()] = { _INITIALIZED = -1 };"
 			"end;"
-			"if _ENV.PROCESSES_DATA[script_pid()]._INITIALIZED < 1 then"
-			"	_ENV.PROCESSES_DATA[script_pid()]._INITIALIZED = _ENV.PROCESSES_DATA[script_pid()]._INITIALIZED + 1;"
+			"if PROCESSES_DATA[script_pid()]._INITIALIZED < 1 then"
+			"	PROCESSES_DATA[script_pid()]._INITIALIZED = PROCESSES_DATA[script_pid()]._INITIALIZED + 1;"
 			"end;";
 
 		// Make sure the file path doesn't contain backslash characters, replace them with forward slash.
@@ -161,7 +172,7 @@ namespace wi::lua
 
 				lua_settop(L, 0);
 
-				int status = luaL_loadstring(L, command.c_str());
+				int status = luau_load(L, "chunkname", command.c_str(), command.size(), 0);
 				if (status == 0)
 				{
 					status = lua_pcall(L, 0, LUA_MULTRET, 0);
@@ -317,7 +328,7 @@ namespace wi::lua
 		TrailRenderer_BindLua::Bind();
 		Async_BindLua::Bind();
 
-		wilog("wi::lua Initialized [Lua %s.%s.%s] (%d ms)", LUA_VERSION_MAJOR, LUA_VERSION_MINOR, LUA_VERSION_RELEASE, (int)std::round(timer.elapsed()));
+		wilog("wi::lua Initialized [Luau] (%d ms)", (int)std::round(timer.elapsed()));
 	}
 
 	lua_State* GetLuaState()
@@ -354,19 +365,19 @@ namespace wi::lua
 		}
 		return false;
 	}
-	bool RunText(const char* script)
+	bool RunText(const char* script, const char* chunk_name)
 	{
-		if(luaL_loadstring(lua_internal().m_luaState, script) == LUA_OK)
+		if(LuauLoad(lua_internal().m_luaState, chunk_name, script, strlen(script)))
 		{
 			return RunScript();
 		}
-
+		
 		PostErrorMsg();
 		return false;
 	}
 	bool RunBinaryData(const void* data, size_t size, const char* debugname)
 	{
-		if(luaL_loadbuffer(lua_internal().m_luaState, (const char*)data, size, debugname) == LUA_OK)
+		if (luau_load(lua_internal().m_luaState, debugname, (const char*)data, size, 0) == 0)
 		{
 			return RunScript();
 		}
@@ -376,7 +387,8 @@ namespace wi::lua
 	}
 	void RegisterFunc(const char* name, lua_CFunction function)
 	{
-		lua_register(lua_internal().m_luaState, name, function);
+		lua_pushcfunction(lua_internal().m_luaState, function, name);
+		lua_setglobal(lua_internal().m_luaState, name);
 	}
 
 	void SetDeltaTime(double dt)
@@ -628,19 +640,14 @@ namespace wi::lua
 
 	void SError(lua_State* L, const std::string& error)
 	{
-		//retrieve line number for error info
-		lua_Debug ar;
-		lua_getstack(L, 1, &ar);
-		lua_getinfo(L, "nSl", &ar);
-		int line = ar.currentline;
-
 		std::string ss;
 		ss += WILUA_ERROR_PREFIX;
-		ss += "Line " + std::to_string(line) + ": ";
+
 		if (!error.empty())
-		{
 			ss += error;
-		}
+		else if (lua_isstring(L, -1))
+			ss += lua_tostring(L, -1);
+
 		wi::backlog::post(ss, wi::backlog::LogLevel::Error);
 
 		ReturnToEditor(L);
@@ -668,19 +675,26 @@ namespace wi::lua
 	}
 	bool CompileText(const char* script, wi::vector<uint8_t>& dst)
 	{
-		if(luaL_loadstring(lua_internal().m_luaState, script) != LUA_OK)
+		size_t outsize = 0;
+
+		char* bytecode = luau_compile(script, strlen(script), nullptr, &outsize);
+
+		if (!bytecode)
+			return false;
+
+		// Error check
+		if (luau_bytecode_is_error(bytecode, outsize))
 		{
-			PostErrorMsg();
+			std::string err(bytecode + 1, outsize - 1);
+			wi::backlog::post(err, wi::backlog::LogLevel::Error);
+
+			free(bytecode);
 			return false;
 		}
-		dst.clear();
-		if(lua_dump(lua_internal().m_luaState, writer, &dst, 0) != LUA_OK)
-		{
-			PostErrorMsg();
-			lua_pop(lua_internal().m_luaState, 1); // lua_dump does not pop the dumped function from stack
-			return false;
-		}
-		lua_pop(lua_internal().m_luaState, 1); // lua_dump does not pop the dumped function from stack
+
+		dst.assign(bytecode, bytecode + outsize);
+
+		free(bytecode);
 		return true;
 	}
 

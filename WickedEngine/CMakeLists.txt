@@ -68,7 +68,22 @@ else ()
     endif()
 endif()
 
-add_subdirectory(LUA)
+# LUAU
+set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_FUZZER OFF CACHE BOOL "" FORCE)
+add_subdirectory(luau)
+
+foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast Luau.Analysis Luau.Config Luau.CodeGen)
+    if(TARGET ${_luau_target})
+        target_compile_options(${_luau_target} PRIVATE
+                $<$<CXX_COMPILER_ID:GNU,Clang>:-fexceptions>
+                $<$<CXX_COMPILER_ID:MSVC>:/EHsc>
+        )
+    endif()
+endforeach()
+
 add_subdirectory(Utility)
 
 set(PHYSICS_REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
@@ -166,9 +181,14 @@ target_include_directories(WickedEngine_common SYSTEM PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/WickedEngine>
 )
 
+target_include_directories(WickedEngine_common SYSTEM PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/luau/VM/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/luau/Compiler/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/luau/Common/include>
+)
+
 set(WICKEDENGINE_STATIC_LIBRARIES
     Jolt
-    LUA
     Utility
 )
 
@@ -260,6 +280,7 @@ else ()
 endif()
 
 target_link_libraries(WickedEngine_common PUBLIC ${WICKEDENGINE_STATIC_LIBRARIES})
+target_link_libraries(WickedEngine_common PRIVATE Luau.VM Luau.Compiler Luau.Ast)
 
 if (PLATFORM MATCHES "SDL2")
     target_compile_definitions(WickedEngine_common PUBLIC SDL2=1)
@@ -289,7 +310,6 @@ set_property(SOURCE
 
     PROPERTY SKIP_UNITY_BUILD_INCLUSION TRUE
 )
-set_property(TARGET LUA PROPERTY UNITY_BUILD NO)
 
 
 if(WICKED_ENABLE_IPO)
@@ -346,23 +366,12 @@ install(DIRECTORY "${WICKED_ROOT_DIR}/Content"
 set_target_properties(${TARGET_NAME} PROPERTIES EXPORT_NAME WickedEngine)
 
 install(TARGETS ${TARGET_NAME} ${WICKEDENGINE_STATIC_LIBRARIES} WickedEngine_common
-        EXPORT Engine-Targets
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}/WickedEngine"
         PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/WickedEngine")
 
 install(FILES ${LIBDXCOMPILER}
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/WickedEngine")
-
-export(EXPORT Engine-Targets
-        FILE "${CMAKE_BINARY_DIR}/cmake/WickedEngineTargets.cmake"
-        NAMESPACE WickedEngine::
-        )
-
-install(EXPORT Engine-Targets
-        FILE WickedEngineTargets.cmake
-        NAMESPACE WickedEngine::
-        DESTINATION ${INSTALL_CONFIGDIR})
 
 set(_CONFIG_INSTALL_DIR_INCLUDE "${WICKED_ROOT_DIR}")
 set(_CONFIG_INSTALL_DIR_LIB "${WICKED_ROOT_DIR}")

@@ -40,6 +40,18 @@ else()
 endif()
 message("libdxcompiler found at ${LIBDXCOMPILER_PATH}")
 
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+
+        # Copy dxcompiler library
+        COMMAND ${CMAKE_COMMAND} -E echo " Copying shader compile library ${WICKED_ROOT_DIR}/WickedEngine/${LIB_DXCOMPILER}..."
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${WICKED_ROOT_DIR}/WickedEngine/${LIB_DXCOMPILER}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMAND ${CMAKE_COMMAND} -E echo " Copying shader compile library complete!"
+
+        VERBATIM
+)
+
 add_custom_command(
     TARGET Template_Linux POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIBDXCOMPILER_PATH} ${CMAKE_CURRENT_BINARY_DIR}

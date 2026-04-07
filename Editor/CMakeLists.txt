@@ -67,6 +67,18 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/fonts ${CMAKE_CURRENT_BINARY_DIR}/fonts
 )
 
+add_custom_command(TARGET Editor POST_BUILD
+
+        # Copy dxcompiler library
+        COMMAND ${CMAKE_COMMAND} -E echo " Copying shader compile library ${WICKED_ROOT_DIR}/WickedEngine/${LIB_DXCOMPILER}..."
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${WICKED_ROOT_DIR}/WickedEngine/${LIB_DXCOMPILER}"
+        "$<TARGET_FILE_DIR:Editor>"
+        COMMAND ${CMAKE_COMMAND} -E echo " Copying shader compile library complete to $<TARGET_FILE_DIR:Editor>!"
+
+        VERBATIM
+)
+
 include(GNUInstallDirs)
 set(EDITOR_INSTALL_FOLDER "${CMAKE_INSTALL_LIBDIR}/WickedEngine/Editor")
 

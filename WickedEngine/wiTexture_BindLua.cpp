@@ -266,10 +266,10 @@ GradientType = {
 }
 GradientFlags = {
 	None = 0,
-	Inverse = 1 << 0,	
-	Smoothstep = 1 << 1,
-	PerlinNoise = 1 << 2,
-	R16Unorm = 1 << 3,
+	Inverse = 1,	
+	Smoothstep = 2,
+	PerlinNoise = 4,
+	R16Unorm = 8,
 }
 )");
 		}

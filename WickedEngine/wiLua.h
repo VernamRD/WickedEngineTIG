@@ -7,12 +7,9 @@
 
 #include <string>
 
-extern "C"
-{
-#include "LUA/lua.h"
-#include "LUA/lualib.h"
-#include "LUA/lauxlib.h"
-}
+#include "lua.h"
+#include "lualib.h"
+#include "luacode.h"
 
 typedef int(*lua_CFunction) (lua_State* L);
 
@@ -29,8 +26,8 @@ namespace wi::lua
 	bool RunBinaryFile(const char* filename);
 	inline bool RunBinaryFile(const std::string& filename) { return RunBinaryFile(filename.c_str()); }
 	//run a script from param
-	bool RunText(const char* script);
-	inline bool RunText(const std::string& script) { return RunText(script.c_str()); }
+	bool RunText(const char* script, const char* chunk_name = "chunk");
+	inline bool RunText(const std::string& script, const std::string chunk_name = "chunk") { return RunText(script.c_str(), chunk_name.c_str()); }
 	//run binary script
 	bool RunBinaryData(const void* data, size_t size, const char* debugname = "");
 	//register function to use in scripts
@@ -200,6 +197,11 @@ namespace wi::lua
 	// Compiles LUA source code text into binary LUA code
 	bool CompileText(const char* script, wi::vector<uint8_t>& dst);
 	inline bool CompileText(const std::string& script, wi::vector<uint8_t>& dst) { return CompileText(script.c_str(), dst); }
+
+	inline bool luau_bytecode_is_error(const char* data, size_t size)
+	{
+		return size > 0 && data[0] == 0;
+	}
 
 	// With this you can enable the IsThisEditor() and ReturnToEditor() functionality in lua scripts
 	//	This allows easier script testing with editor functionality instead of managing previous render paths yourself in scripts

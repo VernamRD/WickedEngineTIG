@@ -60,10 +60,22 @@ public:
 	multiple types of arguments passed to the func
 	*/
 	static T* lightcheck(lua_State * L, int narg) {
-		T** obj = static_cast <T **>(luaL_testudata(L, narg, T::className));
-		if (!obj)
-			return nullptr; // lightcheck returns nullptr if not found.
-		return *obj;		// pointer to T object
+		void* ud = lua_touserdata(L, narg);
+		if (!ud)
+			return nullptr;
+
+		if (!lua_getmetatable(L, narg))
+			return nullptr;
+
+		luaL_getmetatable(L, T::className);
+
+		bool equal = lua_rawequal(L, -1, -2);
+		lua_pop(L, 2);
+
+		if (!equal)
+			return nullptr;
+
+		return *static_cast<T**>(ud);
 	}
 
 	/*
@@ -87,48 +99,42 @@ public:
 				lua_pushvalue(L, -1); // Duplicate table pointer since setglobal pops the value
 				lua_setglobal(L, namespac);
 			}
-			lua_pushcfunction(L, &Luna < T >::constructor);
+			lua_pushcfunction(L, &Luna < T >::constructor, T::className);
 			lua_setfield(L, -2, T::className);
 			lua_pop(L, 1);
 		}
 		else {
-			lua_pushcfunction(L, &Luna < T >::constructor);
+			lua_pushcfunction(L, &Luna < T >::constructor, T::className);
 			lua_setglobal(L, T::className);
 		}
 
 		luaL_newmetatable(L, T::className);
 		int             metatable = lua_gettop(L);
+		
+		lua_pushcfunction(L, &Luna < T >::gc_obj, "__gc");
+		lua_setfield(L, metatable, "__gc");
+		
+		lua_pushcfunction(L, &Luna < T >::to_string, "__tostring");
+		lua_setfield(L, metatable, "__tostring");
 
-		lua_pushstring(L, "__gc");
-		lua_pushcfunction(L, &Luna < T >::gc_obj);
-		lua_settable(L, metatable);
-
-		lua_pushstring(L, "__tostring");
-		lua_pushcfunction(L, &Luna < T >::to_string);
-		lua_settable(L, metatable);
-
-		lua_pushstring(L, "__eq");		// To be able to compare two Luna objects (not natively possible with full userdata)
-		lua_pushcfunction(L, &Luna < T >::equals);
-		lua_settable(L, metatable);
-
-		lua_pushstring(L, "__index");
-		lua_pushcfunction(L, &Luna < T >::property_getter);
-		lua_settable(L, metatable);
-
-		lua_pushstring(L, "__newindex");
-		lua_pushcfunction(L, &Luna < T >::property_setter);
-		lua_settable(L, metatable);
+		// To be able to compare two Luna objects (not natively possible with full userdata)
+		lua_pushcfunction(L, &Luna < T >::equals, "__eq");
+		lua_setfield(L, metatable, "__eq");
+		
+		lua_pushcfunction(L, &Luna < T >::property_getter, "__index");
+		lua_setfield(L, metatable, "__index");
+		
+		lua_pushcfunction(L, &Luna < T >::property_setter, "__newindex");
+		lua_setfield(L, metatable, "__newindex");
 
 		for (int i = 0; T::properties[i].name; i++) { 				// Register some properties in it
-			lua_pushstring(L, T::properties[i].name);				// Having some string associated with them
-			lua_pushnumber(L, i); 									// And a number indexing which property it is
-			lua_settable(L, metatable);
+			lua_pushinteger(L, i); 									// And a number indexing which property it is
+			lua_setfield(L, metatable, T::properties[i].name);					// Having some string associated with them
 		}
 
 		for (int i = 0; T::methods[i].name; i++) {
-			lua_pushstring(L, T::methods[i].name); 					// Register some functions in it
-			lua_pushnumber(L, i | (1 << 8));						// Add a number indexing which func it is
-			lua_settable(L, metatable);								//
+			lua_pushinteger(L, i | (1 << 8));						// Add a number indexing which func it is
+			lua_setfield(L, metatable, T::methods[i].name);					// Register some functions in it
 		}
 
 		lua_pop(L, 1);
@@ -193,7 +199,7 @@ public:
 
 		if (lua_isnumber(L, -1)) { // Check if we got a valid index
 
-			int _index = static_cast<int>(lua_tonumber(L, -1));
+			int _index = lua_tointeger(L, -1);
 
 			T** obj = static_cast<T**>(lua_touserdata(L, 1));
 
@@ -201,9 +207,9 @@ public:
 
 			if (_index & (1 << 8)) // A func
 			{
-				lua_pushnumber(L, _index ^ (1 << 8)); // Push the right func index
+				lua_pushinteger(L, _index ^ (1 << 8)); // Push the right func index
 				lua_pushlightuserdata(L, obj);
-				lua_pushcclosure(L, &Luna < T >::function_dispatch, 2);
+				lua_pushcclosure(L, &Luna < T >::function_dispatch, T::properties[_index].name, 2);
 				return 1; // Return a func
 			}
 

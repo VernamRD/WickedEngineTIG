@@ -1,0 +1,6 @@
+[submodule "ThirdParty/luau"]
+	path = ThirdParty/luau
+	url = https://github.com/luau-lang/luau.git
+[submodule "WickedEngine/luau"]
+	path = WickedEngine/luau
+	url = https://github.com/luau-lang/luau.git
