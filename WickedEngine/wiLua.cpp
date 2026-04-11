@@ -352,7 +352,7 @@ namespace wi::lua
 		{
 			std::string script = std::string(filedata.begin(), filedata.end());
 			AttachScriptParameters(script, filename);
-			return RunText(script);
+			return RunText(script, filename);
 		}
 		return false;
 	}

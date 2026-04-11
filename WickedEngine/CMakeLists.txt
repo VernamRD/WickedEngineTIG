@@ -69,20 +69,44 @@ else ()
 endif()
 
 # LUAU
+set(LUAU_BUILD_CLI ON CACHE BOOL "" FORCE)
 set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(LUAU_BUILD_CLI OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_BENCH OFF CACHE BOOL "" FORCE)
 set(LUAU_BUILD_FUZZER OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(luau)
 
-foreach(_luau_target Luau.VM Luau.Compiler Luau.Ast Luau.Analysis Luau.Config Luau.CodeGen)
-    if(TARGET ${_luau_target})
-        target_compile_options(${_luau_target} PRIVATE
-                $<$<CXX_COMPILER_ID:GNU,Clang>:-fexceptions>
-                $<$<CXX_COMPILER_ID:MSVC>:/EHsc>
-        )
+
+# Get all luau targets
+get_directory_property(_luau_targets DIRECTORY luau BUILDSYSTEM_TARGETS)
+
+# Enable -fno-exception for lua targets
+foreach(_target ${_luau_targets})
+    if(TARGET ${_target})
+        get_target_property(_type ${_target} TYPE)
+
+        if(_type STREQUAL "INTERFACE_LIBRARY")
+            target_compile_options(${_target} INTERFACE
+                    $<$<CXX_COMPILER_ID:GNU,Clang>:-fexceptions>
+                    $<$<CXX_COMPILER_ID:MSVC>:/EHsc>
+            )
+        else()
+            target_compile_options(${_target} PRIVATE
+                    $<$<CXX_COMPILER_ID:GNU,Clang>:-fexceptions>
+                    $<$<CXX_COMPILER_ID:MSVC>:/EHsc>
+            )
+            # GCC/Clang
+            if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+                target_compile_options(${_target} PRIVATE "-fexceptions")
+            endif()
+        endif()
     endif()
 endforeach()
+
+# Cache luau executable
+if(TARGET Luau.Repl.CLI)
+    set(LUAU_EXE $<TARGET_FILE:Luau.Repl.CLI>)
+endif()
 
 add_subdirectory(Utility)
 
@@ -107,6 +131,9 @@ list(REMOVE_ITEM SOURCE_FILES
 
 file(GLOB SHADER_FILES CONFIGURE_DEPENDS shaders/*.hlsl shaders/*.hlsli)
 
+include(luauParser/parser.cmake)
+register_luau_parser()
+
 # these are all Wicked files except wiRenderer.cpp, which can be compiled
 # with embedded shaders or not. If embedded shaders are enabled in the build,
 # we will create 2 libraries, one version without embedded shaders, and the normal
@@ -114,6 +141,7 @@ file(GLOB SHADER_FILES CONFIGURE_DEPENDS shaders/*.hlsl shaders/*.hlsli)
 # the shaders depends on the wicked library as well, so we have a chicken-and-egg
 # problem.
 add_library(WickedEngine_common OBJECT ${SOURCE_FILES} ${HEADER_FILES})
+add_luau_bindings(WickedEngine_common ${HEADER_FILES})
 
 # the version without embedded shaders
 add_library(WickedEngine_ext_shaders ${WICKED_LIBRARY_TYPE}
